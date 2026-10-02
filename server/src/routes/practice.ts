@@ -6,6 +6,11 @@ import { attempts, cards, pointEvents, users } from "../db/schema.js";
 import { requireAuth, publicUser, type AuthVars } from "../lib/auth.js";
 import { exactMatch, pickNextCard } from "../lib/mastery.js";
 import { gradeWithGemma } from "../lib/lmstudio.js";
+import {
+  langCodeForLabel,
+  transcribeSpeech,
+} from "../lib/elevenlabs.js";
+import { decryptSecret } from "../lib/secret.js";
 import { transcribeWithScriberr } from "../lib/scriberr.js";
 import { getProgress } from "./cards.js";
 
@@ -313,18 +318,57 @@ practiceRoutes.post("/speak", async (c) => {
 
   const speakLang =
     direction === "reverse" ? user.promptLang : user.answerLang;
+  const expectedWord =
+    direction === "reverse" ? card.prompt : card.answer;
+  const filename = file.name || "answer.webm";
 
-  const transcribed = await transcribeWithScriberr(
-    file,
-    file.name || "answer.webm",
-    { language: speakLang }
-  );
-  if (!transcribed.ok) {
+  let transcriptText = "";
+  let elapsedMs = 0;
+  let provider: "elevenlabs" | "scriberr" = "scriberr";
+  let lastError = "";
+  let timedOut = false;
+
+  if (user.elevenlabsKeyEnc) {
+    try {
+      const apiKey = decryptSecret(user.elevenlabsKeyEnc, user.id);
+      const el = await transcribeSpeech(apiKey, file, filename, {
+        languageCode: langCodeForLabel(speakLang),
+        keyterms: [expectedWord],
+      });
+      elapsedMs += el.elapsedMs;
+      if (el.ok) {
+        transcriptText = el.text;
+        provider = "elevenlabs";
+      } else {
+        lastError = el.error;
+      }
+    } catch {
+      lastError = "Could not decrypt ElevenLabs API key";
+    }
+  }
+
+  if (!transcriptText) {
+    const local = await transcribeWithScriberr(file, filename, {
+      language: speakLang,
+    });
+    elapsedMs += local.elapsedMs;
+    if (local.ok) {
+      transcriptText = local.text;
+      provider = "scriberr";
+    } else {
+      timedOut = Boolean(local.timedOut);
+      lastError = lastError
+        ? `${lastError} (local fallback: ${local.error})`
+        : local.error;
+    }
+  }
+
+  if (!transcriptText) {
     return c.json(
       {
-        error: transcribed.error,
-        timedOut: Boolean(transcribed.timedOut),
-        elapsedMs: transcribed.elapsedMs,
+        error: lastError || "Transcription failed",
+        timedOut,
+        elapsedMs,
       },
       502
     );
@@ -333,7 +377,7 @@ practiceRoutes.post("/speak", async (c) => {
   const result = await applyAnswer({
     userId: user.id,
     card,
-    answer: transcribed.text.trim(),
+    answer: transcriptText.trim(),
     source: "speak",
     direction,
     promptLang: user.promptLang,
@@ -341,8 +385,9 @@ practiceRoutes.post("/speak", async (c) => {
     pointsTotal: user.pointsTotal,
   });
   return c.json({
-    transcript: transcribed.text,
-    elapsedMs: transcribed.elapsedMs,
+    transcript: transcriptText,
+    elapsedMs,
+    provider,
     ...result,
   });
 });

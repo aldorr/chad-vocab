@@ -57,9 +57,33 @@ export function PracticePage() {
   toastRef.current = toast;
 
   const playSide = useCallback((id: string, side: "answer" | "prompt") => {
-    const a = new Audio(`/api/cards/${id}/audio/${side}`);
+    const a = new Audio(`/api/cards/${id}/audio/${side}?t=${Date.now()}`);
     void a.play().catch(() => undefined);
   }, []);
+
+  const ensureCardAudio = useCallback(
+    async (c: PracticeCard): Promise<PracticeCard> => {
+      const needs =
+        !c.hasPromptAudio ||
+        !c.hasAnswerAudio;
+      const ready =
+        user?.elevenlabsKeyHint && user.promptVoiceId && user.answerVoiceId;
+      if (!needs || !ready) return c;
+      try {
+        const res = await api.generateAudio({ cardIds: [c.id] });
+        const updated = res.cards.find((x) => x.id === c.id);
+        if (!updated) return c;
+        return {
+          ...c,
+          hasAnswerAudio: updated.hasAnswerAudio,
+          hasPromptAudio: updated.hasPromptAudio,
+        };
+      } catch {
+        return c;
+      }
+    },
+    [user?.elevenlabsKeyHint, user?.promptVoiceId, user?.answerVoiceId]
+  );
 
   const loadNext = useCallback(async () => {
     setBusy(true);
@@ -71,17 +95,22 @@ export function PracticePage() {
     setTranscribeLabel("");
     try {
       const res = await api.nextCard(lastId.current);
-      setCard(res.card);
+      let next = res.card;
+      if (next) {
+        next = await ensureCardAudio(next);
+      }
+      setCard(next);
       setProgress(res.progress);
       setAllLearned(Boolean(res.allLearned));
-      if (res.card) {
-        lastId.current = res.card.id;
-        setShowCueText(!res.card.hasPromptAudio);
-        if (res.card.hasPromptAudio) {
-          window.setTimeout(
-            () => playSide(res.card!.id, res.card!.cueAudioSide),
-            150
-          );
+      if (next) {
+        lastId.current = next.id;
+        const cueHasAudio =
+          next.cueAudioSide === "prompt"
+            ? next.hasPromptAudio
+            : next.hasAnswerAudio;
+        setShowCueText(!cueHasAudio);
+        if (cueHasAudio) {
+          window.setTimeout(() => playSide(next!.id, next!.cueAudioSide), 150);
         }
       }
     } catch (err) {
@@ -91,7 +120,7 @@ export function PracticePage() {
     } finally {
       setBusy(false);
     }
-  }, [playSide]);
+  }, [playSide, ensureCardAudio]);
 
   // Mount only — avoid re-running when toast identity changes (was causing card loops)
   useEffect(() => {

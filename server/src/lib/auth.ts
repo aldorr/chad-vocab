@@ -82,6 +82,11 @@ export function publicUser(user: User) {
     pointsTotal: user.pointsTotal,
     promptLang: user.promptLang,
     answerLang: user.answerLang,
+    elevenlabsKeyHint: user.elevenlabsKeyHint ?? null,
+    promptVoiceId: user.promptVoiceId ?? null,
+    promptVoiceName: user.promptVoiceName ?? null,
+    answerVoiceId: user.answerVoiceId ?? null,
+    answerVoiceName: user.answerVoiceName ?? null,
     createdAt: user.createdAt,
   };
 }

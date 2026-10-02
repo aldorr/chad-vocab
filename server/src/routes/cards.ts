@@ -6,6 +6,8 @@ import path from "node:path";
 import { db, resolvePath } from "../db/index.js";
 import { cards } from "../db/schema.js";
 import { requireAuth, type AuthVars } from "../lib/auth.js";
+import { extractPairsFromImage } from "../lib/lmstudio.js";
+import { contentTypeForAudioPath } from "../lib/speechAudio.js";
 
 export const cardRoutes = new Hono<{ Variables: AuthVars }>();
 
@@ -132,6 +134,79 @@ cardRoutes.post("/import", async (c) => {
   return c.json({ added, skipped });
 });
 
+/** Preview-only: extract vocab pairs from a textbook photo via Gemma vision. */
+cardRoutes.post("/from-photo", async (c) => {
+  const user = c.get("user");
+  const form = await c.req.parseBody();
+  const file = form["image"] ?? form["photo"] ?? form["file"];
+
+  if (!file || !(file instanceof File)) {
+    return c.json({ error: "image file required (JPEG or PNG)" }, 400);
+  }
+
+  const mime = (file.type || "image/jpeg").toLowerCase();
+  if (mime && !mime.startsWith("image/") && mime !== "application/octet-stream") {
+    return c.json({ error: "File must be an image (JPEG or PNG preferred)" }, 400);
+  }
+  if (
+    mime.includes("heic") ||
+    mime.includes("heif") ||
+    mime.includes("webp") ||
+    mime.includes("avif")
+  ) {
+    return c.json(
+      {
+        error:
+          "Please use JPEG or PNG. The browser usually converts camera photos automatically — if this persists, take a screenshot of the page instead.",
+      },
+      400
+    );
+  }
+
+  const maxBytes = 12 * 1024 * 1024;
+  const buf = Buffer.from(await file.arrayBuffer());
+  if (buf.length > maxBytes) {
+    return c.json({ error: "Image too large (max 12MB)" }, 400);
+  }
+  if (buf.length < 32) {
+    return c.json({ error: "Image file is empty" }, 400);
+  }
+
+  // Sniff real format — browsers sometimes lie about HEIC as image/jpeg
+  const head = buf.subarray(0, 12);
+  const isJpeg = head[0] === 0xff && head[1] === 0xd8;
+  const isPng =
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47;
+  if (!isJpeg && !isPng) {
+    return c.json(
+      {
+        error:
+          "Image isn’t a JPEG/PNG after upload. Try a screenshot or export as JPEG, then scan again.",
+      },
+      400
+    );
+  }
+
+  const result = await extractPairsFromImage({
+    base64: buf.toString("base64"),
+    mime: isPng ? "image/png" : "image/jpeg",
+    promptLang: user.promptLang,
+    answerLang: user.answerLang,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.error }, 502);
+  }
+
+  return c.json({
+    pairs: result.pairs,
+    langs: { promptLang: user.promptLang, answerLang: user.answerLang },
+  });
+});
+
 cardRoutes.delete("/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
@@ -216,7 +291,7 @@ cardRoutes.get("/:id/audio/:side", async (c) => {
   if (!fs.existsSync(full)) return c.json({ error: "Missing file" }, 404);
   return new Response(fs.readFileSync(full), {
     headers: {
-      "Content-Type": "audio/webm",
+      "Content-Type": contentTypeForAudioPath(rel),
       "Cache-Control": "private, max-age=3600",
     },
   });

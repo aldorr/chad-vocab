@@ -92,6 +92,24 @@ export function migrate() {
       `ALTER TABLE users ADD COLUMN answer_lang TEXT NOT NULL DEFAULT 'Spanish'`
     );
   }
+  if (!names.has("elevenlabs_key_enc")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN elevenlabs_key_enc TEXT`);
+  }
+  if (!names.has("elevenlabs_key_hint")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN elevenlabs_key_hint TEXT`);
+  }
+  if (!names.has("prompt_voice_id")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN prompt_voice_id TEXT`);
+  }
+  if (!names.has("prompt_voice_name")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN prompt_voice_name TEXT`);
+  }
+  if (!names.has("answer_voice_id")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN answer_voice_id TEXT`);
+  }
+  if (!names.has("answer_voice_name")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN answer_voice_name TEXT`);
+  }
 
   const cardCols = sqlite
     .prepare(`PRAGMA table_info(cards)`)

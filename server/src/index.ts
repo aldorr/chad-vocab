@@ -10,6 +10,7 @@ import { db, migrate, resolvePath } from "./db/index.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardRoutes } from "./routes/cards.js";
 import { practiceRoutes } from "./routes/practice.js";
+import { speechRoutes } from "./routes/speech.js";
 import type { AuthVars } from "./lib/auth.js";
 
 // Load .env from repo root if present (simple parser, no dotenv dep required)
@@ -86,6 +87,7 @@ app.get("/api/health", async (c) => {
 app.route("/api/auth", authRoutes);
 app.route("/api/cards", cardRoutes);
 app.route("/api/practice", practiceRoutes);
+app.route("/api/speech", speechRoutes);
 
 const clientDist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

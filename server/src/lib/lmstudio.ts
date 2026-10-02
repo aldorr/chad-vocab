@@ -323,3 +323,197 @@ Learner answer: ${given}`;
     };
   }
 }
+
+export type VocabPair = { answer: string; prompt: string };
+
+export type ExtractPairsResult =
+  | { ok: true; pairs: VocabPair[] }
+  | { ok: false; error: string };
+
+function parsePairsPayload(content: string, reasoning = ""): VocabPair[] | null {
+  const sources = [stripCodeFence(content), content.trim(), reasoning.trim()].filter(
+    Boolean
+  );
+
+  for (const src of sources) {
+    const arrayMatch = src.match(/\[[\s\S]*\]/);
+    if (!arrayMatch) continue;
+    try {
+      const parsed = JSON.parse(arrayMatch[0]) as unknown;
+      if (!Array.isArray(parsed)) continue;
+      const pairs: VocabPair[] = [];
+      for (const item of parsed) {
+        if (!item || typeof item !== "object") continue;
+        const row = item as Record<string, unknown>;
+        const answer = String(
+          row.answer ?? row.target ?? row.learning ?? row.word ?? ""
+        ).trim();
+        const prompt = String(
+          row.prompt ?? row.cue ?? row.translation ?? row.meaning ?? ""
+        ).trim();
+        if (answer && prompt) pairs.push({ answer, prompt });
+      }
+      if (pairs.length > 0) return pairs;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract vocab pairs from a textbook photo via Gemma 3 (or other) vision model.
+ * Prefer JPEG/PNG; models often normalize to ~896×896 so crop tightly to the list.
+ */
+export async function extractPairsFromImage(opts: {
+  base64: string;
+  mime: string;
+  promptLang: string;
+  answerLang: string;
+}): Promise<ExtractPairsResult> {
+  const mime = opts.mime.toLowerCase().startsWith("image/")
+    ? opts.mime.toLowerCase()
+    : "image/jpeg";
+  // Prefer JPEG/PNG for the vision API
+  const safeMime =
+    mime === "image/png" || mime === "image/jpeg" || mime === "image/jpg"
+      ? mime === "image/jpg"
+        ? "image/jpeg"
+        : mime
+      : "image/jpeg";
+
+  if (
+    mime.includes("heic") ||
+    mime.includes("heif") ||
+    mime.includes("webp") ||
+    mime.includes("avif")
+  ) {
+    return {
+      ok: false,
+      error:
+        "That image format often fails in LM Studio. Use JPEG/PNG (the app converts when the browser can).",
+    };
+  }
+
+  const system = `You extract bilingual vocabulary lists from textbook photos for language learners.
+Return ONLY a JSON array (no markdown, no commentary): [{"answer":"...","prompt":"..."},...]
+- "answer" = the ${opts.answerLang} word/phrase (learning language)
+- "prompt" = the ${opts.promptLang} cue/translation
+Ignore page numbers, exercise instructions, grammar notes, and unrelated text.
+Skip incomplete or unreadable rows. Deduplicate identical pairs.`;
+
+  const userText = `Read the vocabulary list in this image. Extract every clear ${opts.answerLang} ↔ ${opts.promptLang} pair as JSON.`;
+
+  try {
+    let model = (await ensureReadyModel()) || preferredModel();
+
+    const body = {
+      model,
+      messages: [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userText },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${safeMime};base64,${opts.base64}`,
+              },
+            },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 2048,
+      reasoning_effort: "none",
+    };
+
+    const call = async (modelId: string) => {
+      const res = await fetch(`${openaiBase()}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, model: modelId }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return {
+          ok: false as const,
+          error: `LM Studio ${res.status}: ${text.slice(0, 300)}`,
+        };
+      }
+      const data = (await res.json()) as {
+        choices?: {
+          message?: { content?: string; reasoning_content?: string };
+        }[];
+        error?: string | { message?: string };
+      };
+      if (data.error) {
+        const msg =
+          typeof data.error === "string"
+            ? data.error
+            : data.error.message || JSON.stringify(data.error);
+        return { ok: false as const, error: msg };
+      }
+      const message = data.choices?.[0]?.message;
+      return {
+        ok: true as const,
+        content: message?.content?.trim() ?? "",
+        reasoning: message?.reasoning_content?.trim() ?? "",
+      };
+    };
+
+    let result = await call(model);
+    if (!result.ok && isNoModelError(result.error)) {
+      const loaded = await ensureReadyModel();
+      if (loaded) {
+        model = loaded;
+        result = await call(model);
+      }
+    }
+
+    if (!result.ok) {
+      const err = result.error;
+      if (/ffprobe|mtmd|decode buffer|channel error/i.test(err)) {
+        return {
+          ok: false,
+          error:
+            "LM Studio couldn’t decode the photo (often HEIC/WebP, or missing ffmpeg/ffprobe in LM Studio’s PATH). Retake as JPEG/PNG, or install ffmpeg and restart LM Studio.",
+        };
+      }
+      if (/vision|image|multimodal|not support/i.test(err)) {
+        return {
+          ok: false,
+          error:
+            "Photo scan needs a vision-capable model in LM Studio (e.g. Gemma 3/4 with Vision Input). Load one and try again.",
+        };
+      }
+      return { ok: false, error: err };
+    }
+
+    const pairs = parsePairsPayload(result.content, result.reasoning);
+    if (!pairs) {
+      return {
+        ok: false,
+        error:
+          "Could not read vocabulary pairs from the model response. Try a clearer JPEG/PNG crop of the list.",
+      };
+    }
+    return { ok: true, pairs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "LM Studio unavailable";
+    if (/ffprobe|mtmd|channel error/i.test(msg)) {
+      return {
+        ok: false,
+        error:
+          "LM Studio couldn’t decode the photo. Use JPEG/PNG, and ensure ffmpeg/ffprobe is available to LM Studio (Homebrew: `brew install ffmpeg`, then restart LM Studio).",
+      };
+    }
+    return {
+      ok: false,
+      error: `Photo scan failed: ${msg}. Is LM Studio running with a vision model loaded?`,
+    };
+  }
+}
+

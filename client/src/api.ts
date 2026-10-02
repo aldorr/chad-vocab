@@ -4,10 +4,25 @@ export type User = {
   pointsTotal: number;
   promptLang: string;
   answerLang: string;
+  elevenlabsKeyHint: string | null;
+  promptVoiceId: string | null;
+  promptVoiceName: string | null;
+  answerVoiceId: string | null;
+  answerVoiceName: string | null;
   createdAt: number;
 };
 
 export type AudioSide = "answer" | "prompt";
+
+export type VoiceOption = {
+  voiceId: string;
+  name: string;
+  language: string | null;
+  accent: string | null;
+  previewUrl: string | null;
+  educational: boolean;
+  category?: string | null;
+};
 
 export type Card = {
   id: string;
@@ -29,6 +44,18 @@ export type Progress = {
   new: number;
   unlearned: number;
   pointsTotal?: number;
+};
+
+export type GenerateAudioResult = {
+  generated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+  cards: Array<{
+    id: string;
+    hasAnswerAudio: boolean;
+    hasPromptAudio: boolean;
+  }>;
 };
 
 async function request<T>(
@@ -80,34 +107,58 @@ export const api = {
       body: JSON.stringify(body),
     }),
   logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
-  updateSettings: (body: { promptLang: string; answerLang: string }) =>
+  updateSettings: (body: {
+    promptLang?: string;
+    answerLang?: string;
+    elevenlabsApiKey?: string | null;
+    clearElevenlabsKey?: boolean;
+    promptVoiceId?: string | null;
+    promptVoiceName?: string | null;
+    answerVoiceId?: string | null;
+    answerVoiceName?: string | null;
+  }) =>
     request<{ user: User }>("/auth/settings", {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  listElevenlabsVoices: (side: AudioSide) =>
+    request<{
+      voices: VoiceOption[];
+      educationalOnly: boolean;
+      language: string;
+      languageCode: string | null;
+    }>(`/auth/elevenlabs/voices?side=${side}`),
   listCards: () => request<{ cards: Card[] }>("/cards"),
   importCards: (text: string) =>
     request<{ added: number; skipped: number }>("/cards/import", {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
+  scanPhoto: async (blob: Blob, filename = "page.jpg") => {
+    const form = new FormData();
+    form.append("image", blob, filename);
+    return request<{
+      pairs: { answer: string; prompt: string }[];
+      langs: { promptLang: string; answerLang: string };
+    }>("/cards/from-photo", { method: "POST", body: form });
+  },
   deleteCard: (id: string) =>
     request<{ ok: boolean }>(`/cards/${id}`, { method: "DELETE" }),
-  uploadAudio: async (id: string, side: AudioSide, blob: Blob) => {
-    const form = new FormData();
-    form.append("audio", blob, `${side}.webm`);
-    return request<{
-      ok: boolean;
-      hasAnswerAudio: boolean;
-      hasPromptAudio: boolean;
-    }>(`/cards/${id}/audio/${side}`, {
-      method: "POST",
-      body: form,
-    });
-  },
   deleteAudio: (id: string, side: AudioSide) =>
     request<{ ok: boolean }>(`/cards/${id}/audio/${side}`, {
       method: "DELETE",
+    }),
+  speechStatus: () =>
+    request<{
+      ready: boolean;
+      hasKey: boolean;
+      hasPromptVoice: boolean;
+      hasAnswerVoice: boolean;
+    }>("/speech/status"),
+  generateAudio: (body?: { cardIds?: string[]; regenerate?: boolean }) =>
+    request<GenerateAudioResult>("/speech/generate", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
     }),
   progress: () =>
     request<Progress & { pointsTotal: number }>("/cards/stats/progress"),

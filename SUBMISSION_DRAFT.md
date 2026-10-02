@@ -1,11 +1,11 @@
 # Family Vocab — Hacktoberfest Weekend Challenge draft
 
 **Tag:** `#hf26challenge`  
-**Prize categories:** Best Use of Gemma · Best Use of Entire
+**Prize categories:** Best Use of Gemma · Best Use of ElevenLabs · Best Use of Entire
 
 ## Summary
 
-Family Vocab is a self-hosted, multi-user vocabulary trainer for people learning *any* language pair. Each family member gets their own account, deck, history, and points. Cues can be shown as text or played from your own recorded voice; answers can be typed or spoken. Spoken answers are transcribed with open Whisper via **Scriberr** on the host machine. Near-miss grading uses **Gemma** (or another open model) through **LM Studio**.
+Family Vocab is a self-hosted, multi-user vocabulary trainer for people learning *any* language pair. Each family member gets their own account, deck, history, and points. Cues can be shown as text or played from optional **ElevenLabs** educational TTS (each user brings their own API key and accent-matched voices); answers can be typed or spoken. Spoken answers use **ElevenLabs Scribe** when a key is set, otherwise open Whisper via **Scriberr**. Near-miss grading uses **Gemma** (or another open model) through **LM Studio**.
 
 ## Who it’s for
 

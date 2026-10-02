@@ -9,6 +9,14 @@ export const users = sqliteTable("users", {
   promptLang: text("prompt_lang").notNull().default("German"),
   /** Language the learner must produce (e.g. Spanish, French). */
   answerLang: text("answer_lang").notNull().default("Spanish"),
+  /** AES-256-GCM ciphertext of the user's ElevenLabs API key (never returned). */
+  elevenlabsKeyEnc: text("elevenlabs_key_enc"),
+  /** Last-4 hint shown in the UI, e.g. "…ab12". */
+  elevenlabsKeyHint: text("elevenlabs_key_hint"),
+  promptVoiceId: text("prompt_voice_id"),
+  promptVoiceName: text("prompt_voice_name"),
+  answerVoiceId: text("answer_voice_id"),
+  answerVoiceName: text("answer_voice_name"),
   createdAt: integer("created_at").notNull(),
 });
 

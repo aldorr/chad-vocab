@@ -6,7 +6,7 @@ Open-source, self-hosted vocabulary trainer for families and friends.
 - **Multi-user** — each person registers with their own deck, history, and points
 - **Type or speak** — spoken answers go through local [Scriberr](https://github.com/rishikanthc/Scriberr) (Whisper)
 - **Fuzzy grading** — [LM Studio](https://lmstudio.ai/) + an open model such as **Gemma** accepts near-misses
-- **Your voices** — optional per-card recordings for prompts/reveals
+- **Accented word audio** — optional [ElevenLabs](https://elevenlabs.io/) TTS per user (bring your own API key + voices)
 - **Mastery queue** — needs-practice first; learned cards rare; last 5 mixed with review
 
 MIT licensed. Self-host forever — a later hosted free/paid offering (if any) does not close the source.
@@ -18,6 +18,7 @@ MIT licensed. Self-host forever — a later hosted free/paid offering (if any) d
 - Node.js 20+
 - [Scriberr](https://github.com/rishikanthc/Scriberr) running locally (Homebrew: `brew tap rishikanthc/scriberr && brew install scriberr`)
 - [LM Studio](https://lmstudio.ai/) with an open model loaded (Gemma recommended) and the local server started
+- **Photo → deck:** a **Gemma 3 (or newer) vision** model in LM Studio — look for **Vision Input** in the catalog (e.g. `gemma-3-4b-it`, 12B). Text-only Gemma cannot read textbook photos.
 
 ### Install
 
@@ -32,7 +33,16 @@ Edit `.env`:
 
 1. Create an API key in the Scriberr UI (`http://localhost:8080`) → set `SCRIBERR_API_KEY`
 2. Confirm `LM_STUDIO_URL` (default `http://127.0.0.1:1234/v1`) and `LM_STUDIO_MODEL`
+   - For photo scan, set something vision-capable, e.g. `LM_STUDIO_MODEL=gemma-3-4b-it`
 3. Optional: set `INVITE_CODE` so only people with the code can register
+
+### Optional: ElevenLabs word audio + speak answers
+
+On **Progress**, each person can paste their own ElevenLabs API key (needs Text to Speech, Speech to Text, Voices Read, Models Read) and pick free **default/premade** voices. Instant Voice Clones and Voice Library voices are not usable via the API on the free plan.
+
+New imports then generate MP3 clips automatically; practice generates a silent card on the fly. With a key saved, spoken answers use ElevenLabs Scribe first (falls back to local Scriberr/Whisper).
+
+Changing a voice does not wipe the deck. Use **Regenerate** on a card when you want new clips (that spends characters again).
 
 ### Run (development)
 
@@ -69,6 +79,7 @@ SCRIBERR_MODEL=tiny
 SCRIBERR_TIMEOUT_MS=240000
 ```
 
+## Import format
 
 One pair per line. **Learning language first**, then cue language:
 
@@ -79,6 +90,20 @@ grazie | danke
 ```
 
 Separators: `|`, tab, or comma.
+
+## Scan a textbook page (photo → deck)
+
+On **Deck**, use **Take photo** / **Choose image**. The API sends the picture to your local Gemma vision model and returns candidate pairs — you **always review/edit** before import. Nothing is written to the deck until you confirm.
+
+Tips for better extraction:
+
+- Prefer **JPEG/PNG** — the app re-encodes camera photos to JPEG before upload
+- Crop tightly to the vocab list, but leave a little **margin** — vision models often resize to ~896×896 and can clip edge lines
+- One clear page/list per photo works better than busy multi-column spreads
+- Fix misreads in the review table; uncheck junk rows
+- If LM Studio logs `ffprobe failed` / `Channel Error`, install ffmpeg (`brew install ffmpeg`), **restart LM Studio**, and try a fresh JPEG/PNG or a screenshot
+
+Photos never leave your machine (same local LM Studio path as fuzzy grading).
 
 ## Let family join from other devices
 
@@ -118,7 +143,7 @@ data/     Database + audio (gitignored)
 
 ## Hacktoberfest / open AI
 
-Built for private, local open-weight inference: Scriberr for STT, Gemma via LM Studio for grading. Why open matters: speech and answers stay on your laptop; no cloud AI bill; swap models anytime.
+Built for private, local open-weight inference: Scriberr for STT fallback, Gemma via LM Studio for grading and textbook photo OCR. Optional ElevenLabs (bring-your-own key) provides educational TTS voices and faster Scribe speech-to-text when configured. Why open matters: without a cloud key, speech answers and page photos stay on your laptop; swap models anytime.
 
 ## Roadmap
 
