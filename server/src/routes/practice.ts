@@ -11,6 +11,7 @@ import {
   transcribeSpeech,
 } from "../lib/elevenlabs.js";
 import { decryptSecret } from "../lib/secret.js";
+import { ensureActiveDeck } from "../lib/decks.js";
 import { transcribeWithScriberr } from "../lib/scriberr.js";
 import { getProgress } from "./cards.js";
 
@@ -66,18 +67,20 @@ function parseDirection(raw: unknown): PracticeDirection {
 
 practiceRoutes.get("/next", async (c) => {
   const user = c.get("user");
+  const { user: synced, deck } = await ensureActiveDeck(user);
   const lastId = c.req.query("last") || null;
   const all = await db
     .select()
     .from(cards)
-    .where(eq(cards.userId, user.id))
+    .where(and(eq(cards.userId, synced.id), eq(cards.deckId, deck.id)))
     .all();
 
   if (all.length === 0) {
     return c.json({
       card: null,
-      progress: await getProgress(user.id),
-      langs: { promptLang: user.promptLang, answerLang: user.answerLang },
+      progress: await getProgress(synced.id, deck.id),
+      langs: { promptLang: deck.promptLang, answerLang: deck.answerLang },
+      deckId: deck.id,
     });
   }
 
@@ -85,8 +88,9 @@ practiceRoutes.get("/next", async (c) => {
   if (!card) {
     return c.json({
       card: null,
-      progress: await getProgress(user.id),
-      langs: { promptLang: user.promptLang, answerLang: user.answerLang },
+      progress: await getProgress(synced.id, deck.id),
+      langs: { promptLang: deck.promptLang, answerLang: deck.answerLang },
+      deckId: deck.id,
     });
   }
 
@@ -94,10 +98,11 @@ practiceRoutes.get("/next", async (c) => {
     Math.random() < 0.5 ? "forward" : "reverse";
 
   return c.json({
-    card: orientCard(card, direction, user.promptLang, user.answerLang),
-    progress: await getProgress(user.id),
+    card: orientCard(card, direction, deck.promptLang, deck.answerLang),
+    progress: await getProgress(synced.id, deck.id),
     allLearned: all.every((x) => x.status === "learned"),
-    langs: { promptLang: user.promptLang, answerLang: user.answerLang },
+    langs: { promptLang: deck.promptLang, answerLang: deck.answerLang },
+    deckId: deck.id,
   });
 });
 
@@ -177,7 +182,7 @@ async function applyAnswer(opts: {
       status: card.status,
       pointsAwarded: 0,
       user: publicUser(userRow!),
-      progress: await getProgress(userId),
+      progress: await getProgress(userId, card.deckId),
     };
   }
 
@@ -226,7 +231,7 @@ async function applyAnswer(opts: {
     })
     .where(eq(cards.id, card.id));
 
-  const progress = await getProgress(userId);
+  const progress = await getProgress(userId, card.deckId);
   if (becameLearned && progress.unlearned === 0 && progress.total > 0) {
     await awardPoints(userId, 5, "deck_cleared");
     pointsAwarded += 5;
@@ -256,7 +261,7 @@ async function applyAnswer(opts: {
     status: newStatus,
     pointsAwarded,
     user: publicUser(refreshed!),
-    progress: await getProgress(userId),
+    progress: await getProgress(userId, card.deckId),
   };
 }
 

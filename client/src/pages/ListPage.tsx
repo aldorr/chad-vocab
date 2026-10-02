@@ -2,8 +2,14 @@ import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { api, type AudioSide, type Card } from "../api";
 import { useAuth } from "../auth";
+import { DeckSwitcher } from "../DeckSwitcher";
 import { sampleImportText } from "../samplePairs";
 import { normalizePhotoForScan } from "../normalizePhoto";
+import {
+  clearPhotoScanJob,
+  loadPhotoScanJob,
+  savePhotoScanJob,
+} from "../photoScanStorage";
 import { useToast } from "../Toast";
 
 type ScanRow = {
@@ -23,6 +29,13 @@ function speechReady(user: {
   );
 }
 
+function scanLabelForElapsed(ms: number, prefix = "Reading page"): string {
+  const s = Math.round(ms / 1000);
+  if (s < 8) return `${prefix}… ${s}s`;
+  if (s < 45) return `Still reading… ${s}s — keep this tab open`;
+  return `Almost there… ${s}s — safe to wait; we’ll resume if the page reloads`;
+}
+
 export function ListPage() {
   const { user } = useAuth();
   const toast = useToast();
@@ -35,6 +48,7 @@ export function ListPage() {
   );
   const [msg, setMsg] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [scanLabel, setScanLabel] = useState("");
   const [scanRows, setScanRows] = useState<ScanRow[] | null>(null);
   const [importingScan, setImportingScan] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -42,10 +56,67 @@ export function ListPage() {
   const sampleKey = useRef(`${answerLang}|${promptLang}`);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const scanAbortRef = useRef<AbortController | null>(null);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   async function load() {
     const { cards: list } = await api.listCards();
     setCards(list);
+  }
+
+  function applyScanPairs(pairs: { answer: string; prompt: string }[]) {
+    if (!pairs.length) {
+      toastRef.current.error("No vocabulary pairs found — try a clearer crop");
+      return;
+    }
+    setScanRows(
+      pairs.map((p, i) => ({
+        id: `scan-${i}-${p.answer}-${p.prompt}`,
+        answer: p.answer,
+        prompt: p.prompt,
+        include: true,
+      }))
+    );
+    toastRef.current.ok(
+      `Found ${pairs.length} pair${pairs.length === 1 ? "" : "s"} — review before importing`
+    );
+  }
+
+  async function followScanJob(jobId: string, startedAt: number) {
+    scanAbortRef.current?.abort();
+    const abort = new AbortController();
+    scanAbortRef.current = abort;
+    setScanning(true);
+    setScanLabel(scanLabelForElapsed(Date.now() - startedAt));
+
+    try {
+      const res = await api.waitForPhotoScanJob(jobId, {
+        signal: abort.signal,
+        onTick: (elapsedMs) => {
+          setScanLabel(scanLabelForElapsed(elapsedMs));
+        },
+      });
+      clearPhotoScanJob();
+      applyScanPairs(res.pairs);
+    } catch (err) {
+      if (
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        return;
+      }
+      clearPhotoScanJob();
+      toastRef.current.error(
+        err instanceof Error ? err.message : "Photo scan failed"
+      );
+    } finally {
+      if (scanAbortRef.current === abort) {
+        scanAbortRef.current = null;
+        setScanning(false);
+        setScanLabel("");
+      }
+    }
   }
 
   useEffect(() => {
@@ -53,6 +124,18 @@ export function ListPage() {
       toast.error(e instanceof Error ? e.message : "Failed to load deck")
     );
   }, [toast]);
+
+  // Resume a scan if the phone reloaded mid-wait (camera / Vite / memory)
+  useEffect(() => {
+    const stored = loadPhotoScanJob();
+    if (!stored) return;
+    toastRef.current.info("Resuming photo scan…");
+    void followScanJob(stored.jobId, stored.startedAt);
+    return () => {
+      scanAbortRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const nextKey = `${answerLang}|${promptLang}`;
@@ -172,28 +255,29 @@ export function ListPage() {
       toast.error("Please choose a photo of the vocab list (JPEG or PNG)");
       return;
     }
+    scanAbortRef.current?.abort();
     setScanning(true);
     setScanRows(null);
+    setScanLabel("Preparing photo…");
     try {
       const jpeg = await normalizePhotoForScan(file);
-      const res = await api.scanPhoto(jpeg, jpeg.name);
-      if (!res.pairs.length) {
-        toast.error("No vocabulary pairs found — try a clearer crop");
-        return;
-      }
-      setScanRows(
-        res.pairs.map((p, i) => ({
-          id: `scan-${i}-${p.answer}-${p.prompt}`,
-          answer: p.answer,
-          prompt: p.prompt,
-          include: true,
-        }))
-      );
-      toast.ok(`Found ${res.pairs.length} pair(s) — review before importing`);
+      setScanLabel("Uploading…");
+      const startedAt = Date.now();
+      const { jobId } = await api.startPhotoScan(jpeg, jpeg.name);
+      // Persist immediately — phones often reload after the camera closes
+      savePhotoScanJob({ jobId, startedAt });
+      await followScanJob(jobId, startedAt);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Photo scan failed");
-    } finally {
+      clearPhotoScanJob();
+      if (
+        !(err instanceof DOMException && err.name === "AbortError") &&
+        !(err instanceof Error && err.name === "AbortError")
+      ) {
+        toast.error(err instanceof Error ? err.message : "Photo scan failed");
+      }
       setScanning(false);
+      setScanLabel("");
+    } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
@@ -307,13 +391,15 @@ export function ListPage() {
         </p>
       </header>
 
+      <DeckSwitcher onDeckChange={() => void load()} />
+
       <section className="scan-box">
         <div className="scan-head">
           <h2>Scan textbook page</h2>
           <p className="muted">
-            Photo stays on this machine. Needs a Gemma 3 vision model in LM
-            Studio. Prefer JPEG/PNG; crop tightly to the vocab list (leave a
-            little margin — models may resize to ~896×896).
+            Photo stays on this machine. Prefer <strong>Choose image</strong> on
+            phones (camera capture can reload the tab). If the page does reload,
+            the scan resumes automatically. Needs a vision model in LM Studio.
           </p>
         </div>
         <div className="row-actions">
@@ -321,34 +407,46 @@ export function ListPage() {
             type="button"
             className="btn primary"
             disabled={scanning}
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
           >
-            {scanning ? "Reading page…" : "Take photo"}
+            {scanning ? scanLabel || "Reading page…" : "Choose image"}
           </button>
           <button
             type="button"
             className="btn"
             disabled={scanning}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => cameraInputRef.current?.click()}
           >
-            Choose image
+            Take photo
           </button>
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => void handlePhotoFile(e.target.files?.[0])}
-          />
           <input
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/*"
             hidden
-            onChange={(e) => void handlePhotoFile(e.target.files?.[0])}
+            onChange={(e) => {
+              e.preventDefault();
+              void handlePhotoFile(e.target.files?.[0]);
+            }}
+          />
+          {/* No capture= — forces in-browser picker on many phones and avoids camera-app reloads */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/*"
+            hidden
+            onChange={(e) => {
+              e.preventDefault();
+              void handlePhotoFile(e.target.files?.[0]);
+            }}
           />
         </div>
+        {scanning && (
+          <p className="scan-progress" aria-live="polite">
+            {scanLabel || "Reading page…"} You can leave this tab in the
+            foreground — if it reloads, we’ll pick the scan back up.
+          </p>
+        )}
       </section>
 
       {scanRows && (

@@ -318,6 +318,12 @@ textarea {
   margin: 0 0 0.85rem;
 }
 
+.scan-progress {
+  margin: 0.85rem 0 0;
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
 .scan-pair-list {
   list-style: none;
   padding: 0;
@@ -867,14 +873,57 @@ textarea {
   background: var(--ok);
 }
 
+.deck-switcher {
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.deck-switcher-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: flex-end;
+}
+
+.deck-switcher-label {
+  flex: 1 1 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.deck-switcher-label select {
+  font: inherit;
+  font-weight: 500;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.deck-create {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.deck-create-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
 @media (max-width: 720px) {
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .lang-row {
+  .deck-create-fields {
     grid-template-columns: 1fr;
   }
-  .topnav {
-    align-items: flex-start;
-  }
 }
+

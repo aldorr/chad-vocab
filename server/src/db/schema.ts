@@ -5,10 +5,13 @@ export const users = sqliteTable("users", {
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   pointsTotal: integer("points_total").notNull().default(0),
-  /** Language shown as the cue (e.g. German, English). */
+  /**
+   * Mirrored from the active deck for convenience / legacy.
+   * Prefer reading langs from the active deck when possible.
+   */
   promptLang: text("prompt_lang").notNull().default("German"),
-  /** Language the learner must produce (e.g. Spanish, French). */
   answerLang: text("answer_lang").notNull().default("Spanish"),
+  activeDeckId: text("active_deck_id"),
   /** AES-256-GCM ciphertext of the user's ElevenLabs API key (never returned). */
   elevenlabsKeyEnc: text("elevenlabs_key_enc"),
   /** Last-4 hint shown in the UI, e.g. "…ab12". */
@@ -17,6 +20,19 @@ export const users = sqliteTable("users", {
   promptVoiceName: text("prompt_voice_name"),
   answerVoiceId: text("answer_voice_id"),
   answerVoiceName: text("answer_voice_name"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const decks = sqliteTable("decks", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** Language shown as the cue (e.g. German, English). */
+  promptLang: text("prompt_lang").notNull(),
+  /** Language the learner must produce (e.g. Spanish, French). */
+  answerLang: text("answer_lang").notNull(),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -34,6 +50,9 @@ export const cards = sqliteTable("cards", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  deckId: text("deck_id")
+    .notNull()
+    .references(() => decks.id, { onDelete: "cascade" }),
   /** Word/phrase in the language being learned. */
   answer: text("answer").notNull(),
   /** Cue shown/spoken in the known language. */
@@ -76,5 +95,6 @@ export const pointEvents = sqliteTable("point_events", {
 });
 
 export type User = typeof users.$inferSelect;
+export type Deck = typeof decks.$inferSelect;
 export type Card = typeof cards.$inferSelect;
 export type CardStatus = Card["status"];

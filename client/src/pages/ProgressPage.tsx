@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { api, type Progress, type VoiceOption } from "../api";
 import { useAuth } from "../auth";
+import { DeckSwitcher } from "../DeckSwitcher";
 import { InfoTip } from "../InfoTip";
 import { useToast } from "../Toast";
 
@@ -203,11 +204,26 @@ export function ProgressPage() {
         </p>
       )}
 
+      <DeckSwitcher
+        onDeckChange={() => {
+          void api
+            .progress()
+            .then(setProgress)
+            .catch((e) =>
+              toast.error(
+                e instanceof Error ? e.message : "Failed to load progress"
+              )
+            );
+        }}
+      />
+
       <form onSubmit={saveLangs} className="settings-box stack">
-        <h2>Language pair</h2>
+        <h2>Language pair (this deck)</h2>
         <p className="hint">
           Cue = language you see/hear. Answer = language you type or speak.
-          Changing this does not rewrite cards already in your deck.
+          Saves on the <strong>active</strong> deck only. Use{" "}
+          <strong>New deck</strong> above for a separate language pair and card
+          list. Each account has its own decks.
         </p>
         <div className="lang-row">
           <label>

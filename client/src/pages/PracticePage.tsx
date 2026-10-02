@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Progress, type User } from "../api";
 import { useAuth } from "../auth";
 import { CelebrationBurst } from "../CelebrationBurst";
+import { DeckSwitcher } from "../DeckSwitcher";
 import { flagForLang, langBadge } from "../langFlags";
 import { useToast } from "../Toast";
 
@@ -338,6 +339,8 @@ export function PracticePage() {
           </p>
         )}
       </header>
+
+      <DeckSwitcher onDeckChange={() => void loadNext()} />
 
       {allLearned && progress && progress.total > 0 && (
         <p className="celebrate">All cards learned — occasional review mode.</p>

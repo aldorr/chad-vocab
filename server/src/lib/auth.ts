@@ -82,6 +82,7 @@ export function publicUser(user: User) {
     pointsTotal: user.pointsTotal,
     promptLang: user.promptLang,
     answerLang: user.answerLang,
+    activeDeckId: user.activeDeckId ?? null,
     elevenlabsKeyHint: user.elevenlabsKeyHint ?? null,
     promptVoiceId: user.promptVoiceId ?? null,
     promptVoiceName: user.promptVoiceName ?? null,

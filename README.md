@@ -3,7 +3,8 @@
 Open-source, self-hosted vocabulary trainer for families and friends.
 
 - **Any language pair** — cue in one language, answer in another (e.g. German → Spanish, English → French)
-- **Multi-user** — each person registers with their own deck, history, and points
+- **Multi-user** — each person registers with their own account, language pairs, and decks
+- **Multiple decks** — one account can keep separate decks (e.g. Spanish and French) with their own cards
 - **Type or speak** — spoken answers go through local [Scriberr](https://github.com/rishikanthc/Scriberr) (Whisper)
 - **Fuzzy grading** — [LM Studio](https://lmstudio.ai/) + an open model such as **Gemma** accepts near-misses
 - **Accented word audio** — optional [ElevenLabs](https://elevenlabs.io/) TTS per user (bring your own API key + voices)
@@ -102,6 +103,7 @@ Tips for better extraction:
 - One clear page/list per photo works better than busy multi-column spreads
 - Fix misreads in the review table; uncheck junk rows
 - If LM Studio logs `ffprobe failed` / `Channel Error`, install ffmpeg (`brew install ffmpeg`), **restart LM Studio**, and try a fresh JPEG/PNG or a screenshot
+- On a phone, keep the tab open — scanning is async and can take 1–3+ minutes while Gemma reads the page; the UI polls until results are ready
 
 Photos never leave your machine (same local LM Studio path as fuzzy grading).
 

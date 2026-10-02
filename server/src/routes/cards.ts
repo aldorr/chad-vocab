@@ -6,7 +6,14 @@ import path from "node:path";
 import { db, resolvePath } from "../db/index.js";
 import { cards } from "../db/schema.js";
 import { requireAuth, type AuthVars } from "../lib/auth.js";
+import { ensureActiveDeck } from "../lib/decks.js";
 import { extractPairsFromImage } from "../lib/lmstudio.js";
+import {
+  completePhotoScanJob,
+  createPhotoScanJob,
+  failPhotoScanJob,
+  getPhotoScanJob,
+} from "../lib/photoScanJobs.js";
 import { contentTypeForAudioPath } from "../lib/speechAudio.js";
 
 export const cardRoutes = new Hono<{ Variables: AuthVars }>();
@@ -38,11 +45,15 @@ function publicCard(row: typeof cards.$inferSelect) {
   };
 }
 
-export async function getProgress(userId: string) {
+export async function getProgress(userId: string, deckId?: string) {
   const rows = await db
     .select()
     .from(cards)
-    .where(eq(cards.userId, userId))
+    .where(
+      deckId
+        ? and(eq(cards.userId, userId), eq(cards.deckId, deckId))
+        : eq(cards.userId, userId)
+    )
     .all();
   const total = rows.length;
   const learned = rows.filter((r) => r.status === "learned").length;
@@ -54,25 +65,29 @@ export async function getProgress(userId: string) {
 
 cardRoutes.get("/", async (c) => {
   const user = c.get("user");
+  const { deck } = await ensureActiveDeck(user);
   const rows = await db
     .select()
     .from(cards)
-    .where(eq(cards.userId, user.id))
+    .where(and(eq(cards.userId, user.id), eq(cards.deckId, deck.id)))
     .all();
-  return c.json({ cards: rows.map(publicCard) });
+  return c.json({ cards: rows.map(publicCard), deckId: deck.id });
 });
 
 cardRoutes.get("/stats/progress", async (c) => {
   const user = c.get("user");
-  const progress = await getProgress(user.id);
+  const { deck } = await ensureActiveDeck(user);
+  const progress = await getProgress(user.id, deck.id);
   return c.json({
     ...progress,
     pointsTotal: user.pointsTotal,
+    deckId: deck.id,
   });
 });
 
 cardRoutes.post("/import", async (c) => {
   const user = c.get("user");
+  const { deck } = await ensureActiveDeck(user);
   const body = await c.req.json<{ text?: string }>();
   const text = body.text ?? "";
   const lines = text
@@ -83,7 +98,7 @@ cardRoutes.post("/import", async (c) => {
   const existing = await db
     .select()
     .from(cards)
-    .where(eq(cards.userId, user.id))
+    .where(and(eq(cards.userId, user.id), eq(cards.deckId, deck.id)))
     .all();
   const key = (answer: string, prompt: string) =>
     `${answer.toLowerCase()}|${prompt.toLowerCase()}`;
@@ -118,6 +133,7 @@ cardRoutes.post("/import", async (c) => {
     await db.insert(cards).values({
       id: nanoid(),
       userId: user.id,
+      deckId: deck.id,
       answer,
       prompt,
       answerAudioPath: null,
@@ -131,12 +147,13 @@ cardRoutes.post("/import", async (c) => {
     added++;
   }
 
-  return c.json({ added, skipped });
+  return c.json({ added, skipped, deckId: deck.id });
 });
 
-/** Preview-only: extract vocab pairs from a textbook photo via Gemma vision. */
+/** Start a photo scan job (returns quickly so phones/proxies don't time out). */
 cardRoutes.post("/from-photo", async (c) => {
   const user = c.get("user");
+  const { deck } = await ensureActiveDeck(user);
   const form = await c.req.parseBody();
   const file = form["image"] ?? form["photo"] ?? form["file"];
 
@@ -190,20 +207,75 @@ cardRoutes.post("/from-photo", async (c) => {
     );
   }
 
-  const result = await extractPairsFromImage({
-    base64: buf.toString("base64"),
-    mime: isPng ? "image/png" : "image/jpeg",
-    promptLang: user.promptLang,
-    answerLang: user.answerLang,
-  });
+  const job = createPhotoScanJob(user.id);
+  const base64 = buf.toString("base64");
+  const imageMime = isPng ? "image/png" : "image/jpeg";
+  const promptLang = deck.promptLang;
+  const answerLang = deck.answerLang;
+  const deckId = deck.id;
 
-  if (!result.ok) {
-    return c.json({ error: result.error }, 502);
+  // Run in background — do not await (phone proxies often kill long POSTs)
+  void (async () => {
+    try {
+      console.info(`[photo-scan] job ${job.id} started for user ${user.id}`);
+      const result = await extractPairsFromImage({
+        base64,
+        mime: imageMime,
+        promptLang,
+        answerLang,
+      });
+      if (!result.ok) {
+        console.warn(`[photo-scan] job ${job.id} failed: ${result.error}`);
+        failPhotoScanJob(job.id, result.error);
+        return;
+      }
+      console.info(
+        `[photo-scan] job ${job.id} done with ${result.pairs.length} pair(s)`
+      );
+      completePhotoScanJob(job.id, {
+        pairs: result.pairs,
+        langs: { promptLang, answerLang },
+        deckId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Photo scan failed";
+      console.warn(`[photo-scan] job ${job.id} error:`, msg);
+      failPhotoScanJob(job.id, msg);
+    }
+  })();
+
+  return c.json({ jobId: job.id, status: "pending" as const }, 202);
+});
+
+/** Poll photo scan job status. */
+cardRoutes.get("/from-photo/:jobId", async (c) => {
+  const user = c.get("user");
+  const jobId = c.req.param("jobId");
+  const job = getPhotoScanJob(jobId, user.id);
+  if (!job) return c.json({ error: "Scan job not found or expired" }, 404);
+
+  if (job.status === "pending") {
+    return c.json({
+      jobId: job.id,
+      status: "pending" as const,
+      elapsedMs: Date.now() - job.createdAt,
+    });
   }
-
+  if (job.status === "error") {
+    return c.json({
+      jobId: job.id,
+      status: "error" as const,
+      error: job.error,
+      elapsedMs: job.finishedAt - job.createdAt,
+    });
+  }
   return c.json({
-    pairs: result.pairs,
-    langs: { promptLang: user.promptLang, answerLang: user.answerLang },
+    jobId: job.id,
+    status: "done" as const,
+    pairs: job.pairs,
+    langs: job.langs,
+    deckId: job.deckId,
+    elapsedMs: job.finishedAt - job.createdAt,
   });
 });
 

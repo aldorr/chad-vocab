@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { db, migrate, resolvePath } from "./db/index.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardRoutes } from "./routes/cards.js";
+import { deckRoutes } from "./routes/decks.js";
 import { practiceRoutes } from "./routes/practice.js";
 import { speechRoutes } from "./routes/speech.js";
 import type { AuthVars } from "./lib/auth.js";
@@ -85,6 +86,7 @@ app.get("/api/health", async (c) => {
 });
 
 app.route("/api/auth", authRoutes);
+app.route("/api/decks", deckRoutes);
 app.route("/api/cards", cardRoutes);
 app.route("/api/practice", practiceRoutes);
 app.route("/api/speech", speechRoutes);

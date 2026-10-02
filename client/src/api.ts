@@ -4,11 +4,20 @@ export type User = {
   pointsTotal: number;
   promptLang: string;
   answerLang: string;
+  activeDeckId: string | null;
   elevenlabsKeyHint: string | null;
   promptVoiceId: string | null;
   promptVoiceName: string | null;
   answerVoiceId: string | null;
   answerVoiceName: string | null;
+  createdAt: number;
+};
+
+export type Deck = {
+  id: string;
+  name: string;
+  promptLang: string;
+  answerLang: string;
   createdAt: number;
 };
 
@@ -107,6 +116,34 @@ export const api = {
       body: JSON.stringify(body),
     }),
   logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  listDecks: () =>
+    request<{ decks: Deck[]; activeDeckId: string; user: User }>("/decks"),
+  createDeck: (body: {
+    promptLang: string;
+    answerLang: string;
+    name?: string;
+    activate?: boolean;
+  }) =>
+    request<{ deck: Deck; user: User }>("/decks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  activateDeck: (id: string) =>
+    request<{ deck: Deck; user: User }>(`/decks/${id}/activate`, {
+      method: "POST",
+    }),
+  updateDeck: (
+    id: string,
+    body: { name?: string; promptLang?: string; answerLang?: string }
+  ) =>
+    request<{ deck: Deck; user: User }>(`/decks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteDeck: (id: string) =>
+    request<{ ok: boolean; user: User }>(`/decks/${id}`, {
+      method: "DELETE",
+    }),
   updateSettings: (body: {
     promptLang?: string;
     answerLang?: string;
@@ -134,13 +171,71 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
-  scanPhoto: async (blob: Blob, filename = "page.jpg") => {
+  startPhotoScan: async (blob: Blob, filename = "page.jpg") => {
     const form = new FormData();
     form.append("image", blob, filename);
-    return request<{
-      pairs: { answer: string; prompt: string }[];
-      langs: { promptLang: string; answerLang: string };
-    }>("/cards/from-photo", { method: "POST", body: form });
+    return request<{ jobId: string; status: "pending" }>(
+      "/cards/from-photo",
+      { method: "POST", body: form }
+    );
+  },
+  pollPhotoScanJob: (jobId: string) =>
+    request<{
+      jobId: string;
+      status: "pending" | "done" | "error";
+      pairs?: { answer: string; prompt: string }[];
+      langs?: { promptLang: string; answerLang: string };
+      error?: string;
+      elapsedMs?: number;
+    }>(`/cards/from-photo/${encodeURIComponent(jobId)}`),
+  /** Upload + poll until done. Persists jobId so a phone reload can resume. */
+  scanPhoto: async (
+    blob: Blob,
+    filename = "page.jpg",
+    options?: {
+      onJobId?: (jobId: string) => void;
+      onTick?: (elapsedMs: number) => void;
+      signal?: AbortSignal;
+    }
+  ) => {
+    const started = await api.startPhotoScan(blob, filename);
+    options?.onJobId?.(started.jobId);
+    return api.waitForPhotoScanJob(started.jobId, options);
+  },
+  waitForPhotoScanJob: async (
+    jobId: string,
+    options?: {
+      onTick?: (elapsedMs: number) => void;
+      signal?: AbortSignal;
+      maxWaitMs?: number;
+    }
+  ) => {
+    const maxWaitMs = options?.maxWaitMs ?? 10 * 60_000;
+    const pollMs = 1_500;
+    const deadline = Date.now() + maxWaitMs;
+    const t0 = Date.now();
+
+    while (Date.now() < deadline) {
+      if (options?.signal?.aborted) {
+        throw new DOMException("Photo scan cancelled", "AbortError");
+      }
+      await new Promise((r) => setTimeout(r, pollMs));
+      options?.onTick?.(Date.now() - t0);
+      const status = await api.pollPhotoScanJob(jobId);
+
+      if (status.status === "pending") continue;
+      if (status.status === "error") {
+        throw new Error(status.error || "Photo scan failed");
+      }
+      return {
+        pairs: status.pairs ?? [],
+        langs: status.langs ?? { promptLang: "", answerLang: "" },
+      };
+    }
+
+    throw new Error(
+      "Photo scan is still running after 10 minutes — keep the page open and try again, or check LM Studio."
+    );
   },
   deleteCard: (id: string) =>
     request<{ ok: boolean }>(`/cards/${id}`, { method: "DELETE" }),

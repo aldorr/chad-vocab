@@ -335,27 +335,43 @@ function parsePairsPayload(content: string, reasoning = ""): VocabPair[] | null 
     Boolean
   );
 
+  const fromArray = (parsed: unknown): VocabPair[] | null => {
+    if (!Array.isArray(parsed)) return null;
+    const pairs: VocabPair[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const answer = String(
+        row.answer ?? row.target ?? row.learning ?? row.word ?? ""
+      ).trim();
+      const prompt = String(
+        row.prompt ?? row.cue ?? row.translation ?? row.meaning ?? ""
+      ).trim();
+      if (answer && prompt) pairs.push({ answer, prompt });
+    }
+    return pairs.length > 0 ? pairs : null;
+  };
+
   for (const src of sources) {
     const arrayMatch = src.match(/\[[\s\S]*\]/);
-    if (!arrayMatch) continue;
-    try {
-      const parsed = JSON.parse(arrayMatch[0]) as unknown;
-      if (!Array.isArray(parsed)) continue;
-      const pairs: VocabPair[] = [];
-      for (const item of parsed) {
-        if (!item || typeof item !== "object") continue;
-        const row = item as Record<string, unknown>;
-        const answer = String(
-          row.answer ?? row.target ?? row.learning ?? row.word ?? ""
-        ).trim();
-        const prompt = String(
-          row.prompt ?? row.cue ?? row.translation ?? row.meaning ?? ""
-        ).trim();
-        if (answer && prompt) pairs.push({ answer, prompt });
+    if (arrayMatch) {
+      try {
+        const pairs = fromArray(JSON.parse(arrayMatch[0]));
+        if (pairs) return pairs;
+      } catch {
+        /* try object wrapper */
       }
-      if (pairs.length > 0) return pairs;
-    } catch {
-      /* try next */
+    }
+    const objMatch = src.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try {
+        const obj = JSON.parse(objMatch[0]) as Record<string, unknown>;
+        const nested = obj.pairs ?? obj.words ?? obj.vocabulary ?? obj.items;
+        const pairs = fromArray(nested);
+        if (pairs) return pairs;
+      } catch {
+        /* next */
+      }
     }
   }
   return null;
@@ -434,7 +450,7 @@ Skip incomplete or unreadable rows. Deduplicate identical pairs.`;
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...body, model: modelId }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(600_000),
       });
       if (!res.ok) {
         const text = await res.text();

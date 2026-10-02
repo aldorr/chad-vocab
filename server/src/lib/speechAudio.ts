@@ -99,6 +99,14 @@ export async function generateMissingAudio(
         and(eq(cards.userId, user.id), inArray(cards.id, options.cardIds))
       )
       .all();
+  } else if (user.activeDeckId) {
+    list = await db
+      .select()
+      .from(cards)
+      .where(
+        and(eq(cards.userId, user.id), eq(cards.deckId, user.activeDeckId))
+      )
+      .all();
   } else {
     list = await db
       .select()

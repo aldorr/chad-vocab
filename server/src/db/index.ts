@@ -40,6 +40,15 @@ export function migrate() {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS decks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      prompt_lang TEXT NOT NULL,
+      answer_lang TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -73,6 +82,7 @@ export function migrate() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
+    CREATE INDEX IF NOT EXISTS idx_decks_user ON decks(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_attempts_user ON attempts(user_id);
   `);
@@ -91,6 +101,9 @@ export function migrate() {
     sqlite.exec(
       `ALTER TABLE users ADD COLUMN answer_lang TEXT NOT NULL DEFAULT 'Spanish'`
     );
+  }
+  if (!names.has("active_deck_id")) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN active_deck_id TEXT`);
   }
   if (!names.has("elevenlabs_key_enc")) {
     sqlite.exec(`ALTER TABLE users ADD COLUMN elevenlabs_key_enc TEXT`);
@@ -127,6 +140,9 @@ export function migrate() {
   if (!cardNames.has("prompt_audio_path")) {
     sqlite.exec(`ALTER TABLE cards ADD COLUMN prompt_audio_path TEXT`);
   }
+  if (!cardNames.has("deck_id")) {
+    sqlite.exec(`ALTER TABLE cards ADD COLUMN deck_id TEXT`);
+  }
   // Move legacy single recording onto the cue side
   if (cardNames.has("audio_path")) {
     sqlite.exec(`
@@ -136,4 +152,63 @@ export function migrate() {
         AND (prompt_audio_path IS NULL OR prompt_audio_path = '')
     `);
   }
+
+  // Backfill: one deck per user; attach orphan cards; set active deck
+  const userRows = sqlite
+    .prepare(
+      `SELECT id, prompt_lang, answer_lang, active_deck_id FROM users`
+    )
+    .all() as {
+    id: string;
+    prompt_lang: string;
+    answer_lang: string;
+    active_deck_id: string | null;
+  }[];
+
+  for (const u of userRows) {
+    let deckId = u.active_deck_id;
+    const existingDeck = deckId
+      ? (sqlite
+          .prepare(`SELECT id FROM decks WHERE id = ? AND user_id = ?`)
+          .get(deckId, u.id) as { id: string } | undefined)
+      : undefined;
+
+    if (!existingDeck) {
+      const first = sqlite
+        .prepare(
+          `SELECT id FROM decks WHERE user_id = ? ORDER BY created_at ASC LIMIT 1`
+        )
+        .get(u.id) as { id: string } | undefined;
+      if (first) {
+        deckId = first.id;
+      } else {
+        deckId = `deck_${u.id.slice(0, 12)}_${Date.now().toString(36)}`;
+        const name = `${u.answer_lang} ← ${u.prompt_lang}`;
+        sqlite
+          .prepare(
+            `INSERT INTO decks (id, user_id, name, prompt_lang, answer_lang, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            deckId,
+            u.id,
+            name,
+            u.prompt_lang || "English",
+            u.answer_lang || "Spanish",
+            Date.now()
+          );
+      }
+      sqlite
+        .prepare(`UPDATE users SET active_deck_id = ? WHERE id = ?`)
+        .run(deckId, u.id);
+    }
+
+    sqlite
+      .prepare(
+        `UPDATE cards SET deck_id = ? WHERE user_id = ? AND (deck_id IS NULL OR deck_id = '')`
+      )
+      .run(deckId, u.id);
+  }
+
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_cards_deck ON cards(deck_id)`);
 }

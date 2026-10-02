@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
-import { sessions, users } from "../db/schema.js";
+import { decks, sessions, users } from "../db/schema.js";
 import {
   clearSessionCookie,
   createSession,
@@ -13,6 +13,7 @@ import {
   verifyPassword,
   type AuthVars,
 } from "../lib/auth.js";
+import { createDeckForUser, ensureActiveDeck, setActiveDeck } from "../lib/decks.js";
 import {
   langCodeForLabel,
   listVoicesForLanguage,
@@ -75,6 +76,13 @@ authRoutes.post("/register", async (c) => {
     createdAt: now,
   });
 
+  const deck = await createDeckForUser({
+    userId: id,
+    promptLang,
+    answerLang,
+  });
+  await setActiveDeck(id, deck.id);
+
   const sessionId = await createSession(id);
   setSessionCookie(c, sessionId);
   const user = await db.select().from(users).where(eq(users.id, id)).get();
@@ -111,7 +119,8 @@ authRoutes.post("/logout", requireAuth, async (c) => {
 });
 
 authRoutes.get("/me", requireAuth, async (c) => {
-  return c.json({ user: publicUser(c.get("user")) });
+  const { user } = await ensureActiveDeck(c.get("user"));
+  return c.json({ user: publicUser(user) });
 });
 
 authRoutes.patch("/settings", requireAuth, async (c) => {
@@ -126,6 +135,8 @@ authRoutes.patch("/settings", requireAuth, async (c) => {
     answerVoiceId?: string | null;
     answerVoiceName?: string | null;
   }>();
+
+  const { deck: activeDeck } = await ensureActiveDeck(user);
 
   const patch: Partial<typeof users.$inferInsert> = {};
 
@@ -143,6 +154,15 @@ authRoutes.patch("/settings", requireAuth, async (c) => {
     }
     patch.promptLang = promptLang;
     patch.answerLang = answerLang;
+    // Language pair belongs to the active deck
+    await db
+      .update(decks)
+      .set({
+        promptLang,
+        answerLang,
+        name: `${answerLang} ← ${promptLang}`,
+      })
+      .where(eq(decks.id, activeDeck.id));
   }
 
   if (body.clearElevenlabsKey) {
