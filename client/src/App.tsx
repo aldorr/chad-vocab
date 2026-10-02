@@ -5,15 +5,16 @@ import { AuthPage } from "./pages/AuthPage";
 import { ListPage } from "./pages/ListPage";
 import { PracticePage } from "./pages/PracticePage";
 import { ProgressPage } from "./pages/ProgressPage";
+import { VocabBrokePage } from "./pages/VocabBrokePage";
 import { flagForLang } from "./langFlags";
 import { ToastProvider } from "./Toast";
-import "./App.css";
 
 type Tab = "deck" | "practice" | "progress";
 
 function Shell() {
   const { user, loading, setUser, scriberr, lmStudio } = useAuth();
   const [tab, setTab] = useState<Tab>("practice");
+  const [broke, setBroke] = useState(false);
 
   if (loading) {
     return (
@@ -24,6 +25,10 @@ function Shell() {
   }
 
   if (!user) return <AuthPage />;
+
+  if (broke) {
+    return <VocabBrokePage onBack={() => setBroke(false)} />;
+  }
 
   async function logout() {
     await api.logout();
@@ -66,6 +71,13 @@ function Shell() {
           <span className="pts">{user.pointsTotal} pts</span>
           <span className={scriberr ? "dot ok" : "dot warn"} title="Scriberr" />
           <span className={lmStudio ? "dot ok" : "dot warn"} title="LM Studio" />
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => setBroke(true)}
+          >
+            Light mode
+          </button>
           <button
             type="button"
             className="btn ghost"

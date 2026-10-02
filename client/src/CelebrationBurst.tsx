@@ -2,7 +2,16 @@ type Props = {
   active: boolean;
 };
 
-const COLORS = ["#2d6a4f", "#40916c", "#52b788", "#f4a261", "#e76f51", "#ffd166"];
+/* Catppuccin Mocha pastels */
+const COLORS = [
+  "#94e2d5",
+  "#a6e3a1",
+  "#fab387",
+  "#f9e2af",
+  "#cba6f7",
+  "#f5c2e7",
+  "#74c7ec",
+];
 
 export function CelebrationBurst({ active }: Props) {
   if (!active) return null;
