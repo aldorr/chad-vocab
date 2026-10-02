@@ -1,0 +1,127 @@
+# Family Vocab
+
+Open-source, self-hosted vocabulary trainer for families and friends.
+
+- **Any language pair** — cue in one language, answer in another (e.g. German → Spanish, English → French)
+- **Multi-user** — each person registers with their own deck, history, and points
+- **Type or speak** — spoken answers go through local [Scriberr](https://github.com/rishikanthc/Scriberr) (Whisper)
+- **Fuzzy grading** — [LM Studio](https://lmstudio.ai/) + an open model such as **Gemma** accepts near-misses
+- **Your voices** — optional per-card recordings for prompts/reveals
+- **Mastery queue** — needs-practice first; learned cards rare; last 5 mixed with review
+
+MIT licensed. Self-host forever — a later hosted free/paid offering (if any) does not close the source.
+
+## Quick start
+
+### Requirements
+
+- Node.js 20+
+- [Scriberr](https://github.com/rishikanthc/Scriberr) running locally (Homebrew: `brew tap rishikanthc/scriberr && brew install scriberr`)
+- [LM Studio](https://lmstudio.ai/) with an open model loaded (Gemma recommended) and the local server started
+
+### Install
+
+```bash
+git clone <your-repo-url> family-vocab
+cd family-vocab
+cp .env.example .env
+npm install
+```
+
+Edit `.env`:
+
+1. Create an API key in the Scriberr UI (`http://localhost:8080`) → set `SCRIBERR_API_KEY`
+2. Confirm `LM_STUDIO_URL` (default `http://127.0.0.1:1234/v1`) and `LM_STUDIO_MODEL`
+3. Optional: set `INVITE_CODE` so only people with the code can register
+
+### Run (development)
+
+```bash
+# Terminal A
+scriberr
+
+# Terminal B — LM Studio: load Gemma, start server
+
+# Terminal C
+npm run dev
+```
+
+- App UI: http://localhost:5173  
+- API: http://localhost:3001  
+
+### Production-ish (single process)
+
+```bash
+npm run build
+npm start
+```
+
+Serves the built client from the API on `PORT` (default 3001).
+
+## Optional: faster speak answers
+
+Scriberr’s default WhisperX path can take **minutes** on CPU for a short clip. Family Vocab waits up to 4 minutes and shows a progress label. If speak times out, the button cools down for 60s (`Try again`) so you can keep typing.
+
+To speed things up in Scriberr’s UI, prefer a smaller Whisper model / faster profile for quick transcription when available. Env hints in `.env`:
+
+```bash
+SCRIBERR_MODEL=tiny
+SCRIBERR_TIMEOUT_MS=240000
+```
+
+
+One pair per line. **Learning language first**, then cue language:
+
+```text
+hola | hallo
+merci | thank you
+grazie | danke
+```
+
+Separators: `|`, tab, or comma.
+
+## Let family join from other devices
+
+Keep the app + AI on your machine; expose only the app URL.
+
+### Option A — same Wi‑Fi / LAN
+
+1. Find your Mac’s LAN IP (System Settings → Network)
+2. Run `npm run dev` or `npm start`
+3. Family opens `http://YOUR_LAN_IP:5173` (dev) or `http://YOUR_LAN_IP:3001` (production)
+
+You may need to allow incoming connections in the firewall.
+
+### Option B — Cloudflare Tunnel (recommended off-LAN)
+
+1. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/)
+2. Start the app (`npm start` on port 3001, or Vite on 5173)
+3. Run:
+
+```bash
+cloudflared tunnel --url http://localhost:3001
+```
+
+Share the generated `https://….trycloudflare.com` URL with family.
+
+Do **not** tunnel Scriberr (`:8080`) or LM Studio (`:1234`) — the API calls them on localhost.
+
+Optional: set `COOKIE_SECURE=true` in `.env` when serving only over HTTPS.
+
+## Project layout
+
+```text
+client/   Vite + React UI
+server/   Hono API + SQLite
+data/     Database + audio (gitignored)
+```
+
+## Hacktoberfest / open AI
+
+Built for private, local open-weight inference: Scriberr for STT, Gemma via LM Studio for grading. Why open matters: speech and answers stay on your laptop; no cloud AI bill; swap models anytime.
+
+## Roadmap
+
+1. **Now** — multi-user local MVP  
+2. **Next** — gamification (leaderboards, play modes)  
+3. **Later** — optional hosted tiers (free: text-only, 50 words) while remaining open source for self-hosters  
