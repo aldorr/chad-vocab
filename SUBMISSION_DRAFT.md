@@ -20,7 +20,7 @@ Chad — a friend learning Polish.
 
 ## Demo
 
-- Live: https://vocab.aldorr.net/
+- Live: https://vocab.slotify.work/
 - Username: `chad`
 - Password: see `.demo-credentials` (not in git)
 
@@ -34,4 +34,4 @@ Chad — a friend learning Polish.
 ## Links
 
 - Repo: https://github.com/aldorr/chad-vocab
-- Live demo: https://vocab.aldorr.net/
+- Live demo: https://vocab.slotify.work/

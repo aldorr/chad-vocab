@@ -138,7 +138,7 @@ async function main() {
     `password=${password}`,
     "promptLang=English",
     "answerLang=Polish",
-    "demo=https://vocab.aldorr.net/",
+    "demo=https://vocab.slotify.work/",
     "",
   ].join("\n");
   fs.writeFileSync(credPath, body, { mode: 0o600 });

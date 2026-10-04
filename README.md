@@ -9,7 +9,7 @@ Open-source, self-hosted vocabulary trainer built for **Chad** while he learns *
 - **Optional accents** — [ElevenLabs](https://elevenlabs.io/) TTS / Scribe per account (bring your own API key)
 - **Mastery queue** — needs-practice first; learned cards rare; last 5 mixed with review
 
-Live demo (while the host machine is awake): [https://vocab.aldorr.net/](https://vocab.aldorr.net/)
+Live demo (while the host machine is awake): [https://vocab.slotify.work/](https://vocab.slotify.work/)
 
 MIT licensed. Self-host forever — a later hosted free/paid offering (if any) does not close the source.
 
@@ -137,7 +137,7 @@ You may need to allow incoming connections in the firewall.
 
 1. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/)
 2. Start the app (`npm start` on port 3001, or Vite on 5173)
-3. Point a named tunnel at the app only (example hostname: `vocab.aldorr.net` → `http://localhost:3001`)
+3. Point a named tunnel at the app only (example hostname: `vocab.slotify.work` → `http://localhost:3001`)
 
 Do **not** tunnel Scriberr (`:8080`) or LM Studio (`:1234`) — the API calls them on localhost.
 
