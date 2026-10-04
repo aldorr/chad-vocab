@@ -21,6 +21,13 @@ sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
 
+type SqliteDb = InstanceType<typeof Database>;
+
+/** Live better-sqlite3 handle (for online backup). */
+export function getSqlite(): SqliteDb {
+  return sqlite;
+}
+
 export function migrate() {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (

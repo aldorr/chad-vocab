@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, migrate, resolvePath } from "./db/index.js";
+import { backupDatabase } from "./lib/backupDb.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardRoutes } from "./routes/cards.js";
 import { deckRoutes } from "./routes/decks.js";
@@ -40,6 +41,7 @@ function loadEnv() {
 }
 
 loadEnv();
+backupDatabase("startup");
 migrate();
 
 const audioDir = resolvePath(process.env.AUDIO_DIR || "./data/audio");
