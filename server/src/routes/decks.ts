@@ -10,6 +10,7 @@ import {
   publicDeck,
   setActiveDeck,
 } from "../lib/decks.js";
+import { seedSampleCardsIfEmpty } from "../lib/seedDeck.js";
 
 export const deckRoutes = new Hono<{ Variables: AuthVars }>();
 
@@ -49,6 +50,12 @@ deckRoutes.post("/", async (c) => {
     promptLang,
     answerLang,
     name: body.name,
+  });
+  await seedSampleCardsIfEmpty({
+    userId: user.id,
+    deckId: deck.id,
+    answerLang,
+    promptLang,
   });
 
   const activate = body.activate !== false;

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
 import { cards, decks, users, type Deck, type User } from "../db/schema.js";
+import { seedSampleCardsIfEmpty } from "./seedDeck.js";
 
 export function deckDisplayName(answerLang: string, promptLang: string): string {
   return `${answerLang} ← ${promptLang}`;
@@ -57,13 +58,19 @@ export async function ensureActiveDeck(user: User): Promise<{
     const deck = await createDeckForUser({
       userId: user.id,
       promptLang: user.promptLang || "English",
-      answerLang: user.answerLang || "Spanish",
+      answerLang: user.answerLang || "Polish",
     });
     // Attach any orphan cards (pre-migration) to this deck
     await db
       .update(cards)
       .set({ deckId: deck.id })
       .where(and(eq(cards.userId, user.id)));
+    await seedSampleCardsIfEmpty({
+      userId: user.id,
+      deckId: deck.id,
+      answerLang: deck.answerLang,
+      promptLang: deck.promptLang,
+    });
     await db
       .update(users)
       .set({

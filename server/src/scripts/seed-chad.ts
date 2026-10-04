@@ -3,6 +3,9 @@
  * Writes credentials to repo-root `.demo-credentials` (gitignored).
  *
  * Usage: npm run seed:chad
+ *
+ * Re-running keeps the existing password (from .demo-credentials or DB)
+ * and only fills the Polish←English deck when it is empty.
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -11,9 +14,10 @@ import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, migrate } from "../db/index.js";
-import { cards, decks, users } from "../db/schema.js";
+import { decks, users } from "../db/schema.js";
 import { hashPassword } from "../lib/auth.js";
 import { createDeckForUser, setActiveDeck } from "../lib/decks.js";
+import { seedSampleCardsIfEmpty } from "../lib/seedDeck.js";
 
 function loadEnv() {
   const root = path.resolve(
@@ -40,27 +44,28 @@ function loadEnv() {
   return root;
 }
 
-const STARTER: { prompt: string; answer: string }[] = [
-  { prompt: "hello", answer: "cześć" },
-  { prompt: "thank you", answer: "dziękuję" },
-  { prompt: "please", answer: "proszę" },
-  { prompt: "yes", answer: "tak" },
-  { prompt: "no", answer: "nie" },
-  { prompt: "good morning", answer: "dzień dobry" },
-  { prompt: "good night", answer: "dobranoc" },
-  { prompt: "water", answer: "woda" },
-  { prompt: "bread", answer: "chleb" },
-  { prompt: "friend", answer: "przyjaciel" },
-  { prompt: "I don't understand", answer: "nie rozumiem" },
-  { prompt: "how are you?", answer: "jak się masz?" },
-];
+function readStoredPassword(root: string): string | null {
+  const credPath = path.join(root, ".demo-credentials");
+  if (!fs.existsSync(credPath)) return null;
+  for (const line of fs.readFileSync(credPath, "utf8").split("\n")) {
+    if (line.startsWith("password=")) {
+      const pw = line.slice("password=".length).trim();
+      return pw || null;
+    }
+  }
+  return null;
+}
 
 async function main() {
   const root = loadEnv();
   migrate();
 
   const username = "chad";
-  const password = crypto.randomBytes(9).toString("base64url");
+  const storedPassword = readStoredPassword(root);
+  const password =
+    process.env.CHAD_DEMO_PASSWORD?.trim() ||
+    storedPassword ||
+    crypto.randomBytes(9).toString("base64url");
   const passwordHash = await hashPassword(password);
   const now = Date.now();
 
@@ -100,7 +105,7 @@ async function main() {
 
   if (!user) throw new Error("Failed to create chad user");
 
-  let deckList = await db
+  const deckList = await db
     .select()
     .from(decks)
     .where(eq(decks.userId, user.id))
@@ -119,28 +124,12 @@ async function main() {
   }
   await setActiveDeck(user.id, deck.id);
 
-  const existingCards = await db
-    .select()
-    .from(cards)
-    .where(eq(cards.deckId, deck.id))
-    .all();
-
-  if (existingCards.length === 0) {
-    for (const pair of STARTER) {
-      await db.insert(cards).values({
-        id: nanoid(),
-        userId: user.id,
-        deckId: deck.id,
-        answer: pair.answer,
-        prompt: pair.prompt,
-        status: "new",
-        streak: 0,
-        seen: 0,
-        updatedAt: now,
-        createdAt: now,
-      });
-    }
-  }
+  const added = await seedSampleCardsIfEmpty({
+    userId: user.id,
+    deckId: deck.id,
+    answerLang: "Polish",
+    promptLang: "English",
+  });
 
   const credPath = path.join(root, ".demo-credentials");
   const body = [
@@ -157,7 +146,9 @@ async function main() {
   console.log("Seeded Chad Vocab demo account");
   console.log(`  username: ${username}`);
   console.log(`  password: ${password}`);
-  console.log(`  deck: ${deck.name} (${STARTER.length} starter cards if empty)`);
+  console.log(
+    `  deck: ${deck.name} (${added > 0 ? `added ${added} starter cards` : "starter cards already present"})`
+  );
   console.log(`  credentials file: ${credPath}`);
 }
 

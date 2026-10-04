@@ -14,6 +14,7 @@ import {
   type AuthVars,
 } from "../lib/auth.js";
 import { createDeckForUser, ensureActiveDeck, setActiveDeck } from "../lib/decks.js";
+import { seedSampleCardsIfEmpty } from "../lib/seedDeck.js";
 import {
   langCodeForLabel,
   listVoicesForLanguage,
@@ -94,6 +95,12 @@ authRoutes.post("/register", async (c) => {
     answerLang,
   });
   await setActiveDeck(id, deck.id);
+  await seedSampleCardsIfEmpty({
+    userId: id,
+    deckId: deck.id,
+    answerLang,
+    promptLang,
+  });
 
   const sessionId = await createSession(id);
   setSessionCookie(c, sessionId);

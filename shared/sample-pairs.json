@@ -1,0 +1,91 @@
+{
+  "polish|english": [
+    { "answer": "cześć", "prompt": "hello" },
+    { "answer": "dzień dobry", "prompt": "good morning" },
+    { "answer": "dobry wieczór", "prompt": "good evening" },
+    { "answer": "dobranoc", "prompt": "good night" },
+    { "answer": "do widzenia", "prompt": "goodbye" },
+    { "answer": "dziękuję", "prompt": "thank you" },
+    { "answer": "proszę", "prompt": "please" },
+    { "answer": "przepraszam", "prompt": "sorry / excuse me" },
+    { "answer": "tak", "prompt": "yes" },
+    { "answer": "nie", "prompt": "no" },
+    { "answer": "nie rozumiem", "prompt": "I don't understand" },
+    { "answer": "jak się masz?", "prompt": "how are you?" },
+    { "answer": "dobrze", "prompt": "well / fine" },
+    { "answer": "woda", "prompt": "water" },
+    { "answer": "chleb", "prompt": "bread" },
+    { "answer": "kawa", "prompt": "coffee" },
+    { "answer": "herbata", "prompt": "tea" },
+    { "answer": "przyjaciel", "prompt": "friend" },
+    { "answer": "rodzina", "prompt": "family" },
+    { "answer": "dom", "prompt": "house / home" },
+    { "answer": "taksówka", "prompt": "taxi" },
+    { "answer": "dworzec", "prompt": "station" },
+    { "answer": "ile to kosztuje?", "prompt": "how much does it cost?" },
+    { "answer": "gdzie jest toaleta?", "prompt": "where is the bathroom?" }
+  ],
+  "spanish|english": [
+    { "answer": "hola", "prompt": "hello" },
+    { "answer": "gracias", "prompt": "thank you" },
+    { "answer": "por favor", "prompt": "please" },
+    { "answer": "agua", "prompt": "water" },
+    { "answer": "amigo", "prompt": "friend" }
+  ],
+  "spanish|german": [
+    { "answer": "hola", "prompt": "hallo" },
+    { "answer": "gracias", "prompt": "danke" },
+    { "answer": "por favor", "prompt": "bitte" },
+    { "answer": "agua", "prompt": "Wasser" },
+    { "answer": "amigo", "prompt": "Freund" }
+  ],
+  "french|english": [
+    { "answer": "bonjour", "prompt": "hello" },
+    { "answer": "merci", "prompt": "thank you" },
+    { "answer": "s'il vous plaît", "prompt": "please" },
+    { "answer": "eau", "prompt": "water" },
+    { "answer": "ami", "prompt": "friend" }
+  ],
+  "french|german": [
+    { "answer": "bonjour", "prompt": "hallo" },
+    { "answer": "merci", "prompt": "danke" },
+    { "answer": "s'il vous plaît", "prompt": "bitte" },
+    { "answer": "eau", "prompt": "Wasser" },
+    { "answer": "ami", "prompt": "Freund" }
+  ],
+  "german|english": [
+    { "answer": "hallo", "prompt": "hello" },
+    { "answer": "danke", "prompt": "thank you" },
+    { "answer": "bitte", "prompt": "please" },
+    { "answer": "Wasser", "prompt": "water" },
+    { "answer": "Freund", "prompt": "friend" }
+  ],
+  "english|german": [
+    { "answer": "hello", "prompt": "hallo" },
+    { "answer": "thank you", "prompt": "danke" },
+    { "answer": "please", "prompt": "bitte" },
+    { "answer": "water", "prompt": "Wasser" },
+    { "answer": "friend", "prompt": "Freund" }
+  ],
+  "english|spanish": [
+    { "answer": "hello", "prompt": "hola" },
+    { "answer": "thank you", "prompt": "gracias" },
+    { "answer": "please", "prompt": "por favor" },
+    { "answer": "water", "prompt": "agua" },
+    { "answer": "friend", "prompt": "amigo" }
+  ],
+  "italian|english": [
+    { "answer": "ciao", "prompt": "hello" },
+    { "answer": "grazie", "prompt": "thank you" },
+    { "answer": "per favore", "prompt": "please" },
+    { "answer": "acqua", "prompt": "water" },
+    { "answer": "amico", "prompt": "friend" }
+  ],
+  "italian|german": [
+    { "answer": "ciao", "prompt": "hallo" },
+    { "answer": "grazie", "prompt": "danke" },
+    { "answer": "per favore", "prompt": "bitte" },
+    { "answer": "acqua", "prompt": "Wasser" },
+    { "answer": "amico", "prompt": "Freund" }
+  ]
+}
