@@ -8,11 +8,12 @@ export type MicBlockReason =
   | "unknown";
 
 export function micApiAvailable(): boolean {
-  return Boolean(
+  return (
     typeof navigator !== "undefined" &&
-      window.isSecureContext &&
-      navigator.mediaDevices?.getUserMedia &&
-      typeof MediaRecorder !== "undefined"
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    typeof navigator.mediaDevices?.getUserMedia === "function" &&
+    typeof MediaRecorder !== "undefined"
   );
 }
 
