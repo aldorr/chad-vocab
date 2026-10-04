@@ -5,21 +5,29 @@ import { useAuth } from "../auth";
 import { useToast } from "../Toast";
 
 export function AuthPage() {
-  const { setUser, inviteRequired, scriberr, lmStudio } = useAuth();
+  const {
+    setUser,
+    inviteRequired,
+    registrationEnabled,
+    scriberr,
+    lmStudio,
+  } = useAuth();
   const toast = useToast();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [promptLang, setPromptLang] = useState("English");
-  const [answerLang, setAnswerLang] = useState("Spanish");
+  const [answerLang, setAnswerLang] = useState("Polish");
   const [busy, setBusy] = useState(false);
+
+  const showRegister = registrationEnabled;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "login") {
+      if (mode === "login" || !showRegister) {
         const { user } = await api.login({ username, password });
         setUser(user);
       } else {
@@ -42,29 +50,33 @@ export function AuthPage() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
-        <p className="eyebrow">Family Vocab</p>
-        <h1>Learn together</h1>
+        <p className="eyebrow">Chad Vocab</p>
+        <h1>Polish practice for Chad</h1>
         <p className="lede">
-          Any language pair you choose — see a cue, answer by typing or speaking.
-          Progress stays on this household server.
+          English cues, Polish answers — type or speak. Open-weight grading stays
+          on this household server.
         </p>
 
-        <div className="tabs">
-          <button
-            type="button"
-            className={mode === "login" ? "tab active" : "tab"}
-            onClick={() => setMode("login")}
-          >
-            Log in
-          </button>
-          <button
-            type="button"
-            className={mode === "register" ? "tab active" : "tab"}
-            onClick={() => setMode("register")}
-          >
-            Register
-          </button>
-        </div>
+        {showRegister ? (
+          <div className="tabs">
+            <button
+              type="button"
+              className={mode === "login" ? "tab active" : "tab"}
+              onClick={() => setMode("login")}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className={mode === "register" ? "tab active" : "tab"}
+              onClick={() => setMode("register")}
+            >
+              Register
+            </button>
+          </div>
+        ) : (
+          <p className="hint">Demo login only — ask the host for the account.</p>
+        )}
 
         <form onSubmit={onSubmit} className="stack">
           <label>
@@ -83,13 +95,15 @@ export function AuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={
-                mode === "login" ? "current-password" : "new-password"
+                mode === "login" || !showRegister
+                  ? "current-password"
+                  : "new-password"
               }
               required
               minLength={6}
             />
           </label>
-          {mode === "register" && (
+          {showRegister && mode === "register" && (
             <>
               <div className="lang-row">
                 <label>
@@ -106,18 +120,17 @@ export function AuthPage() {
                   <input
                     value={answerLang}
                     onChange={(e) => setAnswerLang(e.target.value)}
-                    placeholder="Spanish"
+                    placeholder="Polish"
                     required
                   />
                 </label>
               </div>
               <p className="hint">
-                Example: cue English, answer Spanish. Change anytime in
-                Progress.
+                Example: cue English, answer Polish. Change anytime in Progress.
               </p>
             </>
           )}
-          {mode === "register" && inviteRequired && (
+          {showRegister && mode === "register" && inviteRequired && (
             <label>
               Invite code
               <input
@@ -128,7 +141,11 @@ export function AuthPage() {
             </label>
           )}
           <button type="submit" className="btn primary" disabled={busy}>
-            {busy ? "…" : mode === "login" ? "Log in" : "Create account"}
+            {busy
+              ? "…"
+              : mode === "login" || !showRegister
+                ? "Log in"
+                : "Create account"}
           </button>
         </form>
 

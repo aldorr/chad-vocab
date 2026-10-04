@@ -1,6 +1,11 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import { api, type Progress, type VoiceOption } from "../api";
+import {
+  api,
+  type ElevenLabsPlan,
+  type Progress,
+  type VoiceOption,
+} from "../api";
 import { useAuth } from "../auth";
 import { DeckSwitcher } from "../DeckSwitcher";
 import { InfoTip } from "../InfoTip";
@@ -10,6 +15,7 @@ function voiceLabel(v: VoiceOption): string {
   const bits = [v.name];
   if (v.accent) bits.push(v.accent);
   else if (v.language) bits.push(v.language);
+  if (v.category && v.category !== "premade") bits.push(v.category);
   if (v.educational) bits.push("educational");
   return bits.join(" · ");
 }
@@ -26,12 +32,15 @@ export function ProgressPage() {
   const [promptVoices, setPromptVoices] = useState<VoiceOption[]>([]);
   const [answerVoices, setAnswerVoices] = useState<VoiceOption[]>([]);
   const [educationalOnly, setEducationalOnly] = useState(false);
+  const [plan, setPlan] = useState<ElevenLabsPlan | null>(null);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [savingVoice, setSavingVoice] = useState<"prompt" | "answer" | null>(
     null
   );
+  const [savingPremium, setSavingPremium] = useState(false);
 
   const hasKey = Boolean(user?.elevenlabsKeyHint);
+  const includePremium = Boolean(user?.elevenlabsIncludePremium);
 
   useEffect(() => {
     void api
@@ -54,6 +63,7 @@ export function ProgressPage() {
       setPromptVoices([]);
       setAnswerVoices([]);
       setEducationalOnly(false);
+      setPlan(null);
       return;
     }
     let cancelled = false;
@@ -67,6 +77,7 @@ export function ProgressPage() {
         setPromptVoices(p.voices);
         setAnswerVoices(a.voices);
         setEducationalOnly(p.educationalOnly || a.educationalOnly);
+        setPlan(p.plan ?? a.plan ?? null);
       })
       .catch((e) => {
         if (!cancelled) {
@@ -81,7 +92,34 @@ export function ProgressPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasKey, user?.promptLang, user?.answerLang, toast]);
+  }, [
+    hasKey,
+    includePremium,
+    user?.promptLang,
+    user?.answerLang,
+    toast,
+  ]);
+
+  async function setIncludePremium(next: boolean) {
+    setSavingPremium(true);
+    try {
+      const { user: updated } = await api.updateSettings({
+        elevenlabsIncludePremium: next,
+      });
+      setUser(updated);
+      toast.ok(
+        next
+          ? "Premium voices enabled (clones / library on your account)"
+          : "Showing free default voices only"
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update voice preference"
+      );
+    } finally {
+      setSavingPremium(false);
+    }
+  }
 
   async function saveLangs(e: FormEvent) {
     e.preventDefault();
@@ -273,15 +311,15 @@ export function ProgressPage() {
               <li>
                 Create an API key with at least:{" "}
                 <strong>Text to Speech</strong>, <strong>Speech to Text</strong>
-                , <strong>Voices (Read)</strong>, and{" "}
-                <strong>Models (Read)</strong>. A full-access key also works.
+                , <strong>Voices (Read)</strong>, <strong>Models (Read)</strong>,
+                and <strong>User (Read)</strong> so we can detect your plan. A
+                full-access key also works.
               </li>
               <li>Paste the key below (it is stored encrypted on this server).</li>
               <li>
-                Pick cue and answer voices from the free{" "}
-                <strong>default / premade</strong> voices on your account
-                (Rachel, Adam, etc.). Instant Voice Clones and Voice Library
-                voices need a paid ElevenLabs plan for API use.
+                Free plans list <strong>default / premade</strong> voices. Paid
+                plans can turn on <strong>Include premium voices</strong> to use
+                Instant Clones and library voices already on the account.
               </li>
             </ol>
           </InfoTip>
@@ -298,7 +336,8 @@ export function ProgressPage() {
               <p>
                 Required permissions: <strong>text_to_speech</strong>,{" "}
                 <strong>speech_to_text</strong>, <strong>voices_read</strong>,{" "}
-                <strong>models_read</strong> (or grant unrestricted / “all”).
+                <strong>models_read</strong>, <strong>user_read</strong> (or
+                grant unrestricted / “all”).
               </p>
               <p>
                 Create one under Profile → API Keys. The key is never shown
@@ -310,19 +349,46 @@ export function ProgressPage() {
         </div>
 
         {hasKey ? (
-          <div className="row-actions voice-key-row">
-            <span className="muted">
-              Key saved: <code>{user?.elevenlabsKeyHint}</code>
-            </span>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={savingKey}
-              onClick={() => void removeApiKey()}
-            >
-              Remove key
-            </button>
-          </div>
+          <>
+            <div className="row-actions voice-key-row">
+              <span className="muted">
+                Key saved: <code>{user?.elevenlabsKeyHint}</code>
+                {plan && (
+                  <>
+                    {" "}
+                    · plan <code>{plan.tier}</code> ({plan.status})
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={savingKey}
+                onClick={() => void removeApiKey()}
+              >
+                Remove key
+              </button>
+            </div>
+            <label className="premium-toggle">
+              <input
+                type="checkbox"
+                checked={includePremium && Boolean(plan?.canUsePremium)}
+                disabled={
+                  savingPremium || loadingVoices || !plan?.canUsePremium
+                }
+                onChange={(e) => void setIncludePremium(e.target.checked)}
+              />
+              <span>
+                Include premium voices (clones / library on my account)
+                {!plan?.canUsePremium && (
+                  <span className="muted">
+                    {" "}
+                    — needs a paid ElevenLabs plan for API use
+                  </span>
+                )}
+              </span>
+            </label>
+          </>
         ) : (
           <form onSubmit={saveApiKey} className="stack">
             <label>
@@ -349,12 +415,12 @@ export function ProgressPage() {
           <>
             <div className="settings-subhead">
               <h3>Voices</h3>
-              <InfoTip label="How to pick free voices">
+              <InfoTip label="How to pick voices">
                 <p>
-                  On the free plan, the API only allows{" "}
-                  <strong>default / premade</strong> voices (and some generated
-                  ones). Instant Voice Clones and Voice Library voices return
-                  “upgrade your subscription” when used via API.
+                  We read your ElevenLabs plan from the API. Free plans only get{" "}
+                  <strong>default / premade</strong> voices. Paid plans can
+                  enable <strong>Include premium voices</strong> to list Instant
+                  Clones and Voice Library copies already in My Voices.
                 </p>
                 <ol>
                   <li>
@@ -365,18 +431,15 @@ export function ProgressPage() {
                       rel="noreferrer"
                     >
                       Voices
-                    </a>{" "}
-                    and use the built-in default voices.
+                    </a>
+                    .
                   </li>
                   <li>
-                    Refresh this page and pick a cue voice and an answer voice
-                    below.
+                    Free: use built-in defaults. Paid: add clones/library voices
+                    to My Voices, then turn on the premium checkbox here.
                   </li>
+                  <li>Pick a cue voice and an answer voice below.</li>
                 </ol>
-                <p>
-                  Multilingual default voices usually work for any language
-                  pair; pick two that sound clear for learning.
-                </p>
               </InfoTip>
             </div>
 
@@ -474,10 +537,18 @@ export function ProgressPage() {
             {!loadingVoices &&
               (promptVoices.length > 0 || answerVoices.length > 0) && (
                 <p className="hint">
-                  Showing free default/premade voices only
-                  {educationalOnly ? " (Educational labels preferred)." : "."}{" "}
-                  Instant clones and library voices are hidden — they need a paid
-                  ElevenLabs plan for API use.
+                  {includePremium && plan?.canUsePremium
+                    ? "Showing all My Voices (including premium)."
+                    : `Showing free default/premade voices only${
+                        educationalOnly
+                          ? " (Educational labels preferred)"
+                          : ""
+                      }.`}
+                  {plan?.canUsePremium && !includePremium
+                    ? " Turn on “Include premium voices” above to use clones/library voices."
+                    : !plan?.canUsePremium
+                      ? " Upgrade ElevenLabs (and keep User Read on the key) to unlock premium voices."
+                      : ""}
                 </p>
               )}
 

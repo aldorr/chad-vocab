@@ -6,11 +6,18 @@ export type User = {
   answerLang: string;
   activeDeckId: string | null;
   elevenlabsKeyHint: string | null;
+  elevenlabsIncludePremium: boolean;
   promptVoiceId: string | null;
   promptVoiceName: string | null;
   answerVoiceId: string | null;
   answerVoiceName: string | null;
   createdAt: number;
+};
+
+export type ElevenLabsPlan = {
+  tier: string;
+  status: string;
+  canUsePremium: boolean;
 };
 
 export type Deck = {
@@ -97,6 +104,7 @@ export const api = {
       scriberr: boolean;
       lmStudio: boolean;
       inviteRequired: boolean;
+      registrationEnabled: boolean;
     }>("/health"),
   me: () => request<{ user: User }>("/auth/me"),
   register: (body: {
@@ -149,6 +157,7 @@ export const api = {
     answerLang?: string;
     elevenlabsApiKey?: string | null;
     clearElevenlabsKey?: boolean;
+    elevenlabsIncludePremium?: boolean;
     promptVoiceId?: string | null;
     promptVoiceName?: string | null;
     answerVoiceId?: string | null;
@@ -162,6 +171,8 @@ export const api = {
     request<{
       voices: VoiceOption[];
       educationalOnly: boolean;
+      plan: ElevenLabsPlan;
+      includePremium: boolean;
       language: string;
       languageCode: string | null;
     }>(`/auth/elevenlabs/voices?side=${side}`),

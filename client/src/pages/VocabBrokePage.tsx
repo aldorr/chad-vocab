@@ -101,7 +101,7 @@ export function VocabBrokePage({ onBack }: Props) {
         <p className="eyebrow">Light mode denied</p>
         <h1>Vocab Broke</h1>
         <p className="lede">
-          You asked for light mode. Family Vocab only ships Mocha — so here is
+          You asked for light mode. Chad Vocab only ships Mocha — so here is
           math instead.
         </p>
 
@@ -123,7 +123,7 @@ export function VocabBrokePage({ onBack }: Props) {
               Give me a problem
             </button>
             <button type="button" className="btn ghost" onClick={onBack}>
-              Back to Family Vocab
+              Back to Chad Vocab
             </button>
           </form>
         ) : (
@@ -168,7 +168,7 @@ export function VocabBrokePage({ onBack }: Props) {
                 Another problem
               </button>
               <button type="button" className="btn primary" onClick={onBack}>
-                Back to Family Vocab
+                Back to Chad Vocab
               </button>
             </div>
           </div>

@@ -123,6 +123,11 @@ export function migrate() {
   if (!names.has("answer_voice_name")) {
     sqlite.exec(`ALTER TABLE users ADD COLUMN answer_voice_name TEXT`);
   }
+  if (!names.has("elevenlabs_include_premium")) {
+    sqlite.exec(
+      `ALTER TABLE users ADD COLUMN elevenlabs_include_premium INTEGER NOT NULL DEFAULT 0`
+    );
+  }
 
   const cardCols = sqlite
     .prepare(`PRAGMA table_info(cards)`)

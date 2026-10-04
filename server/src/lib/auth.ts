@@ -84,6 +84,7 @@ export function publicUser(user: User) {
     answerLang: user.answerLang,
     activeDeckId: user.activeDeckId ?? null,
     elevenlabsKeyHint: user.elevenlabsKeyHint ?? null,
+    elevenlabsIncludePremium: Boolean(user.elevenlabsIncludePremium),
     promptVoiceId: user.promptVoiceId ?? null,
     promptVoiceName: user.promptVoiceName ?? null,
     answerVoiceId: user.answerVoiceId ?? null,

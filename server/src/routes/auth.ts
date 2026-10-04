@@ -24,6 +24,18 @@ import { decryptSecret, encryptSecret, keyHint } from "../lib/secret.js";
 export const authRoutes = new Hono<{ Variables: AuthVars }>();
 
 authRoutes.post("/register", async (c) => {
+  const registrationRaw = process.env.REGISTRATION_ENABLED?.trim().toLowerCase();
+  const registrationEnabled =
+    registrationRaw === undefined || registrationRaw === ""
+      ? true
+      : !["0", "false", "no", "off"].includes(registrationRaw);
+  if (!registrationEnabled) {
+    return c.json(
+      { error: "Registration is closed on this server. Use the demo login." },
+      403
+    );
+  }
+
   const body = await c.req.json<{
     username?: string;
     password?: string;
@@ -33,8 +45,8 @@ authRoutes.post("/register", async (c) => {
   }>();
   const username = body.username?.trim().toLowerCase() ?? "";
   const password = body.password ?? "";
-  const promptLang = (body.promptLang?.trim() || "German").slice(0, 40);
-  const answerLang = (body.answerLang?.trim() || "Spanish").slice(0, 40);
+  const promptLang = (body.promptLang?.trim() || "English").slice(0, 40);
+  const answerLang = (body.answerLang?.trim() || "Polish").slice(0, 40);
 
   if (username.length < 2 || username.length > 32) {
     return c.json({ error: "Username must be 2–32 characters" }, 400);
@@ -130,6 +142,7 @@ authRoutes.patch("/settings", requireAuth, async (c) => {
     answerLang?: string;
     elevenlabsApiKey?: string | null;
     clearElevenlabsKey?: boolean;
+    elevenlabsIncludePremium?: boolean;
     promptVoiceId?: string | null;
     promptVoiceName?: string | null;
     answerVoiceId?: string | null;
@@ -168,6 +181,7 @@ authRoutes.patch("/settings", requireAuth, async (c) => {
   if (body.clearElevenlabsKey) {
     patch.elevenlabsKeyEnc = null;
     patch.elevenlabsKeyHint = null;
+    patch.elevenlabsIncludePremium = false;
     patch.promptVoiceId = null;
     patch.promptVoiceName = null;
     patch.answerVoiceId = null;
@@ -186,6 +200,10 @@ authRoutes.patch("/settings", requireAuth, async (c) => {
     }
     patch.elevenlabsKeyEnc = encryptSecret(apiKey, user.id);
     patch.elevenlabsKeyHint = keyHint(apiKey);
+  }
+
+  if (typeof body.elevenlabsIncludePremium === "boolean") {
+    patch.elevenlabsIncludePremium = body.elevenlabsIncludePremium;
   }
 
   if (body.promptVoiceId !== undefined) {
@@ -232,13 +250,17 @@ authRoutes.get("/elevenlabs/voices", requireAuth, async (c) => {
   }
   const langLabel = side === "prompt" ? user.promptLang : user.answerLang;
   const code = langCodeForLabel(langLabel);
-  const result = await listVoicesForLanguage(apiKey, code);
+  const result = await listVoicesForLanguage(apiKey, code, {
+    includePremium: Boolean(user.elevenlabsIncludePremium),
+  });
   if (!result.ok) {
     return c.json({ error: result.error }, 400);
   }
   return c.json({
     voices: result.voices,
     educationalOnly: result.educationalOnly,
+    plan: result.plan,
+    includePremium: result.includePremium,
     language: langLabel,
     languageCode: code,
   });

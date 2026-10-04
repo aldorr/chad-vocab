@@ -12,6 +12,7 @@ type AuthState = {
   user: User | null;
   loading: boolean;
   inviteRequired: boolean;
+  registrationEnabled: boolean;
   scriberr: boolean;
   lmStudio: boolean;
   refresh: () => Promise<void>;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [inviteRequired, setInviteRequired] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [scriberr, setScriberr] = useState(false);
   const [lmStudio, setLmStudio] = useState(false);
 
@@ -31,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const health = await api.health();
       setInviteRequired(health.inviteRequired);
+      setRegistrationEnabled(health.registrationEnabled !== false);
       setScriberr(health.scriberr);
       setLmStudio(health.lmStudio);
     } catch {
@@ -56,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         inviteRequired,
+        registrationEnabled,
         scriberr,
         lmStudio,
         refresh,

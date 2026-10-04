@@ -20,6 +20,15 @@ export const users = sqliteTable("users", {
   promptVoiceName: text("prompt_voice_name"),
   answerVoiceId: text("answer_voice_id"),
   answerVoiceName: text("answer_voice_name"),
+  /**
+   * When true and the ElevenLabs plan allows it, list clones/library voices.
+   * Free plans ignore this and stay on premade/generated only.
+   */
+  elevenlabsIncludePremium: integer("elevenlabs_include_premium", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   createdAt: integer("created_at").notNull(),
 });
 

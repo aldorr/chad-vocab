@@ -1,8 +1,8 @@
 {
-  "name": "family-vocab",
+  "name": "chad-vocab",
   "version": "1.0.0",
   "private": true,
-  "description": "Open-source multilingual vocab trainer for families — local AI with Scriberr + LM Studio",
+  "description": "Open-source Polish vocab trainer for Chad — local Gemma + Whisper, optional ElevenLabs",
   "license": "MIT",
   "workspaces": [
     "client",
@@ -14,7 +14,8 @@
     "dev:client": "npm run dev -w client",
     "build": "npm run build -w client && npm run build -w server",
     "start": "npm run start -w server",
-    "db:push": "npm run db:push -w server"
+    "db:push": "npm run db:push -w server",
+    "seed:chad": "npm run seed:chad -w server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

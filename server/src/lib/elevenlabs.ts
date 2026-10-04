@@ -15,6 +15,13 @@ export type VoiceOption = {
   category: string | null;
 };
 
+export type ElevenLabsPlan = {
+  tier: string;
+  status: string;
+  /** True when the key's ElevenLabs plan can use clones/library voices via API. */
+  canUsePremium: boolean;
+};
+
 export type ElevenLabsError = {
   ok: false;
   error: string;
@@ -62,6 +69,61 @@ function isFreeApiVoice(category: string | null | undefined): boolean {
   return c === "premade" || c === "generated" || c === "";
 }
 
+/** Paid / active subscriptions can use clones and library voices via the API. */
+export function planAllowsPremiumApi(plan: {
+  tier?: string | null;
+  status?: string | null;
+}): boolean {
+  const status = (plan.status || "").toLowerCase();
+  const tier = (plan.tier || "").toLowerCase();
+  if (status === "free" || status === "free_disabled") return false;
+  if (tier === "free" || tier === "trial") return false;
+  if (status === "active" || status === "past_due") return true;
+  // Paid-tier trial (e.g. starter trialing), not the free trial tier
+  return status === "trialing" && Boolean(tier);
+}
+
+export async function getSubscription(
+  apiKey: string
+): Promise<{ ok: true; plan: ElevenLabsPlan } | ElevenLabsError> {
+  try {
+    const res = await fetch(`${BASE}/v1/user/subscription`, {
+      headers: headers(apiKey),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      // Missing user_read: treat as free-safe (premade only)
+      if (res.status === 401 || res.status === 403) {
+        return {
+          ok: true,
+          plan: { tier: "unknown", status: "free", canUsePremium: false },
+        };
+      }
+      return { ok: false, error: await readError(res), status: res.status };
+    }
+    const data = (await res.json()) as {
+      tier?: string;
+      status?: string;
+    };
+    const tier = data.tier || "unknown";
+    const status = data.status || "unknown";
+    return {
+      ok: true,
+      plan: {
+        tier,
+        status,
+        canUsePremium: planAllowsPremiumApi({ tier, status }),
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Failed to read ElevenLabs plan",
+    };
+  }
+}
+
 function voiceMatchesLanguage(
   voice: VoiceOption,
   languageCode: string | null
@@ -86,10 +148,13 @@ type RawVoice = {
   }> | null;
 };
 
-function mapAccountVoice(v: RawVoice): VoiceOption | null {
+function mapAccountVoice(
+  v: RawVoice,
+  includePremium: boolean
+): VoiceOption | null {
   if (!v.voice_id || !v.name) return null;
   const category = v.category ?? null;
-  if (!isFreeApiVoice(category)) return null;
+  if (!includePremium && !isFreeApiVoice(category)) return null;
   const labels = v.labels ?? {};
   const verified = v.verified_languages?.[0];
   return {
@@ -103,27 +168,36 @@ function mapAccountVoice(v: RawVoice): VoiceOption | null {
   };
 }
 
-/** Free/default voices on the user's ElevenLabs account (My Voices). */
+/** Voices on the user's ElevenLabs account (My Voices). */
 export async function listAccountVoices(
-  apiKey: string
+  apiKey: string,
+  options?: { includePremium?: boolean }
 ): Promise<{ ok: true; voices: VoiceOption[] } | ElevenLabsError> {
-  // Prefer default voices; fall back to unfiltered list if the param is rejected
-  const attempts = [
-    new URLSearchParams({
-      page_size: "100",
-      include_total_count: "false",
-      voice_type: "default",
-    }),
-    new URLSearchParams({
-      page_size: "100",
-      include_total_count: "false",
-      category: "premade",
-    }),
-    new URLSearchParams({
-      page_size: "100",
-      include_total_count: "false",
-    }),
-  ];
+  const includePremium = Boolean(options?.includePremium);
+  // Free mode: prefer default/premade filters. Premium: list all account voices.
+  const attempts = includePremium
+    ? [
+        new URLSearchParams({
+          page_size: "100",
+          include_total_count: "false",
+        }),
+      ]
+    : [
+        new URLSearchParams({
+          page_size: "100",
+          include_total_count: "false",
+          voice_type: "default",
+        }),
+        new URLSearchParams({
+          page_size: "100",
+          include_total_count: "false",
+          category: "premade",
+        }),
+        new URLSearchParams({
+          page_size: "100",
+          include_total_count: "false",
+        }),
+      ];
 
   let lastError: ElevenLabsError | null = null;
   for (const params of attempts) {
@@ -142,9 +216,9 @@ export async function listAccountVoices(
       }
       const data = (await res.json()) as { voices?: RawVoice[] };
       const voices = (data.voices ?? [])
-        .map(mapAccountVoice)
+        .map((v) => mapAccountVoice(v, includePremium))
         .filter((v): v is VoiceOption => Boolean(v));
-      if (voices.length > 0 || params.has("voice_type") === false) {
+      if (voices.length > 0 || includePremium || !params.has("voice_type")) {
         return { ok: true, voices };
       }
     } catch (err) {
@@ -158,21 +232,31 @@ export async function listAccountVoices(
 }
 
 /**
- * Free-plan-compatible voices on the account, preferred for the cue/answer language.
- * Instant clones and Voice Library voices are excluded (paid API only).
+ * Account voices for the cue/answer language.
+ * Free plan (or premium opted out): premade/generated only.
+ * Paid plan + includePremium: all My Voices (clones/library copies too).
  */
 export async function listVoicesForLanguage(
   apiKey: string,
-  languageCode: string | null
+  languageCode: string | null,
+  options?: { includePremium?: boolean }
 ): Promise<
   | {
       ok: true;
       voices: VoiceOption[];
       educationalOnly: boolean;
+      plan: ElevenLabsPlan;
+      includePremium: boolean;
     }
   | ElevenLabsError
 > {
-  const account = await listAccountVoices(apiKey);
+  const sub = await getSubscription(apiKey);
+  if (!sub.ok) return sub;
+
+  const includePremium =
+    Boolean(options?.includePremium) && sub.plan.canUsePremium;
+
+  const account = await listAccountVoices(apiKey, { includePremium });
   if (!account.ok) return account;
 
   let pool = account.voices;
@@ -182,17 +266,23 @@ export async function listVoicesForLanguage(
   }
 
   const educational = pool.filter((v) => v.educational);
-  const voices = educational.length > 0 ? educational : pool;
+  // With premium on, don't hide non-educational clones the user added
+  const voices =
+    !includePremium && educational.length > 0 ? educational : pool;
 
   voices.sort((a, b) => {
     if (a.educational !== b.educational) return a.educational ? -1 : 1;
+    const ca = (a.category || "").localeCompare(b.category || "");
+    if (ca !== 0) return ca;
     return a.name.localeCompare(b.name);
   });
 
   return {
     ok: true,
     voices,
-    educationalOnly: educational.length > 0,
+    educationalOnly: !includePremium && educational.length > 0,
+    plan: sub.plan,
+    includePremium,
   };
 }
 

@@ -77,11 +77,18 @@ app.get("/api/health", async (c) => {
   } catch {
     lmStudio = false;
   }
+  const registrationRaw = process.env.REGISTRATION_ENABLED?.trim().toLowerCase();
+  const registrationEnabled =
+    registrationRaw === undefined || registrationRaw === ""
+      ? true
+      : !["0", "false", "no", "off"].includes(registrationRaw);
+
   return c.json({
     ok: true,
     scriberr,
     lmStudio,
     inviteRequired: Boolean(process.env.INVITE_CODE?.trim()),
+    registrationEnabled,
   });
 });
 
@@ -105,6 +112,6 @@ if (fs.existsSync(clientDist)) {
 }
 
 const port = Number(process.env.PORT || 3001);
-console.log(`Family Vocab API on http://localhost:${port}`);
+console.log(`Chad Vocab API on http://localhost:${port}`);
 void db;
 serve({ fetch: app.fetch, port });

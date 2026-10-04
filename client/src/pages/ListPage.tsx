@@ -397,9 +397,11 @@ export function ListPage() {
         <div className="scan-head">
           <h2>Scan textbook page</h2>
           <p className="muted">
-            Photo stays on this machine. Prefer <strong>Choose image</strong> on
-            phones (camera capture can reload the tab). If the page does reload,
-            the scan resumes automatically. Needs a vision model in LM Studio.
+            Photo stays on this machine.{" "}
+            <strong>Choose image</strong> picks from your library;{" "}
+            <strong>Take photo</strong> opens the camera on phones. If the page
+            reloads after the camera closes, the scan resumes automatically.
+            Needs a vision model in LM Studio.
           </p>
         </div>
         <div className="row-actions">
@@ -429,11 +431,11 @@ export function ListPage() {
               void handlePhotoFile(e.target.files?.[0]);
             }}
           />
-          {/* No capture= — forces in-browser picker on many phones and avoids camera-app reloads */}
           <input
             ref={cameraInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/*"
+            accept="image/*"
+            capture="environment"
             hidden
             onChange={(e) => {
               e.preventDefault();

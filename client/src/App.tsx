@@ -35,61 +35,79 @@ function Shell() {
     setUser(null);
   }
 
+  const focus = tab === "practice";
+
   return (
-    <div className="app-shell">
-      <nav className="topnav">
-        <div className="brand">
-          <span className="brand-mark">FV</span>
-          <div>
-            <strong>Family Vocab</strong>
-            <small>
-              {flagForLang(user.answerLang)} {user.answerLang} ←{" "}
-              {flagForLang(user.promptLang)} {user.promptLang} · @
-              {user.username}
-            </small>
+    <div className={`app-shell${focus ? " app-shell--focus" : ""}`}>
+      {!focus && (
+        <nav className="topnav">
+          <div className="brand">
+            <span className="brand-mark">CV</span>
+            <div>
+              <strong>Chad Vocab</strong>
+              <small>
+                {flagForLang(user.answerLang)} {user.answerLang} ←{" "}
+                {flagForLang(user.promptLang)} {user.promptLang} · @
+                {user.username}
+              </small>
+            </div>
           </div>
-        </div>
-        <div className="nav-tabs">
-          {(
-            [
-              ["deck", "Deck"],
-              ["practice", "Practice"],
-              ["progress", "Progress"],
-            ] as const
-          ).map(([id, label]) => (
+          <div className="nav-tabs">
+            {(
+              [
+                ["deck", "Deck"],
+                ["practice", "Practice"],
+                ["progress", "Progress"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={tab === id ? "nav active" : "nav"}
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="nav-end">
+            <span className="pts">{user.pointsTotal} pts</span>
+            <span
+              className={scriberr ? "dot ok" : "dot warn"}
+              title="Scriberr"
+            />
+            <span
+              className={lmStudio ? "dot ok" : "dot warn"}
+              title="LM Studio"
+            />
             <button
-              key={id}
               type="button"
-              className={tab === id ? "nav active" : "nav"}
-              onClick={() => setTab(id)}
+              className="btn ghost"
+              onClick={() => setBroke(true)}
             >
-              {label}
+              Light mode
             </button>
-          ))}
-        </div>
-        <div className="nav-end">
-          <span className="pts">{user.pointsTotal} pts</span>
-          <span className={scriberr ? "dot ok" : "dot warn"} title="Scriberr" />
-          <span className={lmStudio ? "dot ok" : "dot warn"} title="LM Studio" />
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => setBroke(true)}
-          >
-            Light mode
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => void logout()}
-          >
-            Log out
-          </button>
-        </div>
-      </nav>
-      <main>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => void logout()}
+            >
+              Log out
+            </button>
+          </div>
+        </nav>
+      )}
+      <main className={focus ? "main--focus" : undefined}>
         {tab === "deck" && <ListPage />}
-        {tab === "practice" && <PracticePage />}
+        {tab === "practice" && (
+          <PracticePage
+            onNavigate={setTab}
+            onLightMode={() => setBroke(true)}
+            onLogout={() => void logout()}
+            scriberr={scriberr}
+            lmStudio={lmStudio}
+          />
+        )}
         {tab === "progress" && <ProgressPage />}
       </main>
     </div>
